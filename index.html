@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apprentissage de la lecture via Langage des Signes</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f0f0f0;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .header, .footer {
+            background-color: #333;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            width: 100%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav {
+            background-color: #555;
+            padding: 12px 0;
+            text-align: center;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 18px;
+            padding: 12px 16px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        .nav a:hover {
+            background-color: #777;
+        }
+
+        .container {
+            padding: 20px;
+            max-width: 800px; /* Limite la largeur pour un meilleur centrage */
+            background: white;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .tab button, .choices button {
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px; /* Espacement entre les boutons */
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        .tab button:hover, .choices button:hover {
+            background-color: #777;
+            transform: scale(1.05);
+        }
+
+        .choice.correct {
+            background-color: #4CAF50;
+        }
+
+        .choice.incorrect {
+            background-color: #F44336;
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #333;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        .error-message {
+            color: red;
+            font-size: 0.9em;
+            display: none;
+            margin-top: 10px;
+        }
+
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            margin-top: 20px;
+        }
+
+        .upload-btn-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+        }
+
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            text-align: center;
+            width: 100%;
+        }
+        #loginForm {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            padding: 25px;
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #333;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #555;
+        }
+        .error-message {
+            color: red;
+            font-size: 0.9em;
+            display: none;
+            margin-top: 10px;
+        }
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            margin-top: 20px;
+        }
+        .btn {
+            border: 2px solid #333;
+            color: white;
+            background-color: #555;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .upload-btn-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+        }
+        .footer {
+            padding: 10px;
+            text-align: center;
+            width: 100%;
+        }
+        select, option {
+        padding: 8px 10px;
+        font-size: 16px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        transition: border-color 0.3s ease;
+    }
+    select:hover, select:focus {
+        border-color: #555;
+        outline: none;
+    }
+    select {
+        width: 100%; /* Utilise toute la largeur disponible */
+        margin-top: 10px; /* Espacement avant la sélection du thème */
+        cursor: pointer;
+        color: #333;
+        background-color: #fff;
+    }
+    .choices button {
+        font-size: 16px;
+        color: white;
+        background-color: #555;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        transition: background-color 0.3s, transform 0.2s;
+        margin-top: 10px;
+        width: auto; /* Adaptatif selon le contenu */
+        cursor: pointer;
+    }
+    .choices button:hover {
+        background-color: #777;
+        transform: scale(1.05);
+    }
+    .choice.correct {
+        background-color: #4CAF50; /* Vert pour les réponses correctes */
+    }
+    .choice.incorrect {
+        background-color: #F44336; /* Rouge pour les réponses incorrectes */
+    }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Apprentissage de la lecture via le Langage des Signes</h1>
+    </div>
+    
+    <div class="container" id="loginForm">
+        <h2>Connexion</h2>
+        <input type="email" id="loginEmail" placeholder="Email" required>
+        <input type="password" id="loginPassword" placeholder="Mot de passe" required>
+        <button onclick="login()">Connexion</button>
+        <div class="error-message" id="error-message">Identifiants incorrects. Veuillez réessayer.</div>
+        <button onclick="showRegisterForm()">Créer un compte</button>
+    </div>
+    
+    <div class="container" id="registerForm" style="display:none;">
+        <h2>Créer un compte</h2>
+        <input type="email" id="registerEmail" placeholder="Email" required>
+        <input type="password" id="registerPassword" placeholder="Mot de passe" required>
+        <button onclick="register()">S'inscrire</button>
+        <div class="error-message" id="register-error-message">Erreur d'inscription. Veuillez réessayer.</div>
+        <button onclick="showLoginForm()">Retour à la connexion</button>
+    </div>
+    <div id="mainContent" style="display:none;">
+        <div class="nav">
+            <a href="#" onclick="openTab(event, 'Home')">Accueil</a>
+            <a href="#" onclick="openTab(event, 'Cours')">Cours</a>
+            <a href="#" onclick="openTab(event, 'Exercices')">Exercices</a>
+        </div>
+        <div class="container">
+            <div id="Home" class="tabcontent" style="display: block;">
+                <h3>Bienvenue sur notre plateforme d'apprentissage du langage des signes</h3>
+                <p>Ce site est dédié à l'apprentissage de la lecture française pour les personnes malentendantes. Vous trouverez ici des ressources pour débuter ou perfectionner votre connaissance du langage des signes.</p>
+                <div id="uploadContainer">
+                    <h3>Uploader une vidéo à transcrire</h3>
+                    <div class="upload-btn-wrapper">
+                        <button class="btn">Télécharger un fichier</button>
+                        <input type="file" name="videoFile" accept="video/mp4, audio/mp3, audio/x-m4a" onchange="handleFileUpload(this)">
+                    </div>
+                    <p id="fileName"></p>
+                    <button onclick="transcribeVideo()">Transcrire Vidéo</button>
+                    <div id="transcriptionResult" style="margin-top: 20px; padding: 10px; background-color: #f1f1f1; border-radius: 5px;"></div>
+                </div>
+            </div>
+            <div id="Cours" class="tabcontent">
+                <h3>Cours</h3>
+                <p>Apprenez le langage des signes à travers des vidéos et des descriptions détaillées.</p>
+                <div class="video">
+                    <video controls>
+                        <source src="path_to_your_video.mp4" type="video/mp4">
+                        <source src="path_to_your_audio.m4a" type="audio/x-m4a">
+                        Votre navigateur ne supporte pas la vidéo.
+                    </video>
+                </div>
+            </div>
+            <div id="Exercices" class="tabcontent">
+                <h3>Exercices</h3>
+                <select id="themeSelector" onchange="loadThemeExercises(this.value)">
+                    <option value="">Sélectionnez un thème</option>
+                    <option value="verbes">Verbes</option>
+                    <option value="politesse">Politesse</option>
+                    <option value="nature">Nature</option>
+                    <!-- Ajoutez ici d'autres options pour les thèmes... -->
+                </select>
+                <div id="exerciseContainer" class="video"></div>
+                <div id="choices" class="choices"></div>
+                <button id="nextButton" onclick="loadNextExercise()" style="display:none;">Suivant</button>
+                <div id="scorePanel">
+                    <h3>Score: <span id="score">0</span></h3>
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            <p>© 2024 Apprentissage de la lecture via Langage des Signes</p>
+        </div>
+    </div>
+    <script>
+        var score = 0;
+        var currentExercise = 0;
+        var themes = {
+            verbes: [
+                { type: 'wordToVideo', question: 'Choisissez la vidéo correspondant à:', word: 'manger', correctAnswer: 'video2.mp4', options: ['video1.mp4', 'video2.mp4', 'video3.mp4'] },
+                { type: 'videoToWord', videoSrc: 'video1.mp4', correctAnswer: 'manger', options: ['manger', 'courir', 'dormir'] },
+                { type: 'videoToText', videoSrc: 'video2.mp4', correctAnswer: 'courir' }
+            ],
+            politesse: [
+                { type: 'wordToVideo', question: 'Choisissez la vidéo correspondant à:', word: 'merci', correctAnswer: 'video2.mp4', options: ['video1.mp4', 'video2.mp4', 'video3.mp4'] },
+                { type: 'videoToWord', videoSrc: 'video1.mp4', correctAnswer: 'bonjour', options: ['derien', 'merci', 'bonjour'] },
+                { type: 'videoToText', videoSrc: 'video2.mp4', correctAnswer: 'Au revoir' }
+            ],
+            nature: [
+                { type: 'wordToVideo', question: 'Choisissez la vidéo correspondant à:', word: 'arbre', correctAnswer: 'video2.mp4', options: ['video1.mp4', 'video2.mp4', 'video3.mp4'] },
+                { type: 'videoToWord', videoSrc: 'video1.mp4', correctAnswer: 'été', options: ['été', 'hiver', 'printemps'] },
+                { type: 'videoToText', videoSrc: 'video2.mp4', correctAnswer: 'beau' }
+            ],
+        };
+        var completedThemes = new Set(); // Pour suivre les thèmes complétés
+        var registeredUsers = {
+            "admin": "admin"
+        };
+        function register() {
+            var email = document.getElementById('registerEmail').value;
+            var password = document.getElementById('registerPassword').value;
+            if (email in registeredUsers) {
+                alert("Un compte avec cet email existe déjà.");
+                return;
+            }
+            registeredUsers[email] = password; // Stocke l'utilisateur
+            console.log("Utilisateur enregistré avec succès : ", email);
+            showLoginForm(); // Redirige vers le formulaire de connexion après l'inscription
+        }
+
+        function login() {
+            var email = document.getElementById('loginEmail').value;
+            var password = document.getElementById('loginPassword').value;
+            if (email in registeredUsers && registeredUsers[email] === password) {
+                console.log("Connexion réussie pour:", email);
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block'; // Afficher le contenu principal après connexion réussie
+            } else {
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('error-message').textContent = "Identifiants incorrects. Veuillez réessayer.";
+            }
+        }
+
+        function toggleForms() {
+            var loginForm = document.getElementById('loginForm');
+            var registerForm = document.getElementById('registerForm');
+            if (loginForm.style.display === 'none') {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+            } else {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+            }
+        }
+
+        function showLoginForm() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registerForm').style.display = 'none';
+        }
+
+        function showRegisterForm() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+        }
+
+        function openTab(evt, tabName) {
+            var tabcontent = document.getElementsByClassName("tabcontent");
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+
+            var tablinks = document.getElementsByClassName("tablinks");
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+
+            document.getElementById(tabName).style.display = "block";
+            if (evt) evt.currentTarget.className += " active";
+
+            if (tabName === 'Exercices' && currentExercise === 0) {
+                loadExercise(currentExercise);
+            }
+        }
+
+        function loadExercise(index) {
+    var exercise = exercises[index];
+    var container = document.getElementById('exerciseContainer');
+    var choices = document.getElementById('choices');
+    choices.innerHTML = ''; // Clear previous choices
+
+    if (exercise.type === 'videoToWord' || exercise.type === 'videoToText') {
+        container.innerHTML = `<video controls><source src="${exercise.videoSrc}" type="video/mp4">Votre navigateur ne supporte pas la vidéo.</video>`;
+        if (exercise.type === 'videoToText') {
+            // Ajout d'un champ de saisie pour la réponse textuelle
+            container.innerHTML += `<input id="userInput" type="text" placeholder="Tapez votre réponse ici..." />`;
+            container.innerHTML += `<button onclick="verifyTextAnswer()">Valider</button>`;
+        } else {
+            exercise.options.forEach(option => {
+                var button = document.createElement('button');
+                button.className = 'choice';
+                button.textContent = option;
+                button.onclick = () => verifyAnswer(button, option);
+                choices.appendChild(button);
+            });
+        }
+    } else if (exercise.type === 'wordToVideo') {
+        container.innerHTML = `<p>${exercise.question} <strong>${exercise.word}</strong></p>`;
+        exercise.options.forEach(videoSrc => {
+            var videoButton = document.createElement('button');
+            videoButton.className = 'choice';
+            videoButton.innerHTML = `<video width="160" height="120" controls><source src="${videoSrc}" type="video/mp4"></video>`;
+            videoButton.onclick = () => verifyAnswer(videoButton, videoSrc);
+            choices.appendChild(videoButton);
+        });
+    }
+
+    // Hide "Next" button initially for each exercise
+    document.getElementById('nextButton').style.display = 'none';
+}
+
+
+        function loadThemeExercises(theme) {
+            if (!themes[theme] || completedThemes.has(theme)) {
+                alert("Ce thème a déjà été complété ou est invalide.");
+                return;  // Empêcher la répétition d'un thème
+            }
+            exercises = themes[theme];  // Charge les exercices du thème sélectionné
+            currentExercise = 0;
+            loadExercise(currentExercise);  // Charge le premier exercice du thème
+            completedThemes.add(theme); // Marquer le thème comme complété
+        }
+
+        function verifyAnswer(button, selectedOption) {
+    var exercise = exercises[currentExercise];
+    const buttons = document.getElementsByClassName('choice');
+    Array.from(buttons).forEach(btn => {
+        btn.disabled = true; // Disable all buttons after selection
+    });
+
+    if (selectedOption === exercise.correctAnswer) {
+        button.classList.add('correct');
+        score += 10;
+    } else {
+        button.classList.add('incorrect');
+        score -= 5;
+    }
+    document.getElementById('score').innerText = score;
+
+    // Show "Next" button if there are more exercises
+    if (currentExercise < exercises.length - 1) {
+        document.getElementById('nextButton').style.display = 'block';
+    } else {
+        document.getElementById('nextButton').style.display = 'none'; // Make sure to hide if no more exercises
+        finalizeExercises();
+    }
+}
+
+function verifyTextAnswer() {
+    var userInput = document.getElementById('userInput');
+    var submitButton = document.querySelector("#exerciseContainer button");
+    var exercise = exercises[currentExercise];
+
+    userInput.disabled = true; // Disable input field
+    submitButton.disabled = true; // Disable submit button to prevent multiple submissions
+
+    if (userInput.value.trim().toLowerCase() === exercise.correctAnswer.toLowerCase()) {
+        alert('Correct!');
+        score += 10;
+    } else {
+        alert('Incorrect. La bonne réponse était: ' + exercise.correctAnswer);
+        score -= 5;
+    }
+    document.getElementById('score').innerText = score;
+    if (currentExercise < exercises.length - 1) {
+        document.getElementById('nextButton').style.display = 'block';
+    } else {
+        finalizeExercises(); // Finalize if last exercise
+    }
+}
+
+
+        function loadNextExercise() {
+    if (currentExercise < exercises.length - 1) {
+        currentExercise++;
+        loadExercise(currentExercise);
+        document.getElementById('nextButton').style.display = 'none'; // Hide the "Next" button until a new answer is selected
+    } else {
+        finalizeExercises();
+    }
+}
+
+function finalizeExercises() {
+    alert('Tous les exercices sont terminés. Voici votre score final: ' + score);
+    // Optionally reset or redirect after finishing all exercises
+}
+
+        function handleFileUpload(input) {
+            if (input.files && input.files[0]) {
+                var formData = new FormData();
+                formData.append('videoFile', input.files[0]);
+
+                fetch('/upload', {
+                method: 'POST',
+                body: formData
+                })
+                .then(response => {
+                if (response.ok) {
+                    return response.json(); // S'assure que la réponse est bien en format JSON
+                }
+                throw new Error('Erreur lors du téléchargement du fichier.');
+                })
+                .then(data => {
+                alert(data.message); // Affiche le message de succès
+                document.getElementById('fileName').innerText = 'Fichier téléchargé : ' + data.fileName;
+                })
+                .catch(error => {
+                console.error('Erreur:', error);
+                alert(error.message);
+                });
+            }
+        }
+        function transcribeVideo() {
+            // Cette fonction semble être un doublon de l'upload ou pourrait être renommée / modifiée pour éviter la confusion
+            alert("La transcription de votre vidéo est en cours...");
+            fetch('/transcribe', {  // Assurez-vous que le backend attend ce endpoint
+                method: 'POST',
+                body: new FormData(document.getElementById('uploadForm'))  // Assurez-vous que 'uploadForm' est défini quelque part dans votre HTML si vous l'utilisez
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('transcriptionResult').innerHTML = "<strong>Transcription :</strong> " + data.transcription;
+                alert("Transcription terminée. Veuillez vérifier les résultats ci-dessous.");
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    </script>
+</body>
+</html>
