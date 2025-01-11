@@ -1,0 +1,20 @@
+AAPL,Apple
+GOOGL,Alphabet (Google)
+MSFT,Microsoft
+AMZN,Amazon
+TSLA,Tesla
+HO.PA,Thales (HO.PA)
+META,Meta (Facebook)
+NFLX,Netflix
+NVDA,NVIDIA
+BABA,Alibaba
+ORCL,Oracle
+INTC,Intel
+AMD,Advanced Micro Devices
+CRM,Salesforce
+SHOP,Shopify
+ADBE,Adobe
+DIS,Disney
+TWTR,Twitter
+PYPL,PayPal
+SQ,Block (Square)
