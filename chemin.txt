@@ -1,0 +1,2 @@
+cd OneDrive - De Vinci/Documents/Projet pi2
+python -m streamlit run dashboard.py
