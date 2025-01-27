@@ -20,7 +20,6 @@ class BuyAndHold(Indicateurs):
 
         for ticker in self.tickers:
             data=self.data_downloader.download_data(ticker,self.date_investissement,self.date_fin_investissement)
-
             if data.empty:
                 print(f"Les données pour {ticker} sont vides. Vérifiez le ticker ou la période de téléchargement.")
                 continue
@@ -53,7 +52,6 @@ class BuyAndHold(Indicateurs):
             except Exception as e:
                 print(f"Erreur lors du calcul des indicateurs pour {ticker} : {e}")
                 continue
-
             for key in ["gain_total", "pourcentage_gain_total", "performance_annualisee", 
                         "volatilite_historique", "ewma_volatility", 
                         "var_parametric", "var_historical", "var_cornish_fisher", 
@@ -65,6 +63,20 @@ class BuyAndHold(Indicateurs):
         return portfolio_performance
 
     def aggregate_portfolio_results(self, portfolio_results):
+        if not portfolio_results:
+            return {
+                "gain_total": 0,
+                "pourcentage_gain_total": 0,
+                "performance_annualisee": 0,
+                "volatilite_historique": 0,
+                "ewma_volatility": 0,
+                "VaR Paramétrique": 0,
+                "VaR Historique": 0,
+                "VaR Cornish-Fisher": 0,
+                "CVaR Paramétrique": 0,
+                "CVaR Historique": 0,
+                "CVaR Cornish-Fisher": 0,
+            }
         total_gain = sum(float(result['gain_total']) for result in portfolio_results.values() if result['gain_total'] is not None)
         total_percentage_gain = sum(float(result['pourcentage_gain_total']) for result in portfolio_results.values() if result['pourcentage_gain_total'] is not None) / len(portfolio_results)
         performance_annualisee = sum(float(result['performance_annualisee']) for result in portfolio_results.values() if result['performance_annualisee'] is not None) / len(portfolio_results)
