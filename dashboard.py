@@ -1,5 +1,4 @@
 import streamlit as st
-import yfinance as yf
 from datetime import datetime, timedelta
 from price_data import PriceData
 from strategies.BuyAndHold import BuyAndHold
@@ -9,6 +8,7 @@ from strategies.data import DataDownloader
 import pandas as pd
 import plotly.express as px
 import logging
+from strategies.MinVariance import MinimumVariance
 
 # Exemple de log
 price_lib = PriceData()
@@ -22,7 +22,7 @@ st.title("📈 Dashboard des Stratégies d'Investissement")
 
 # Paramètres de la stratégie
 st.sidebar.header("Paramètres de la stratégie")
-strategie_choisie = st.sidebar.selectbox("Sélectionner une Stratégie", ["BuyAndHold", "Momentum"])
+strategie_choisie = st.sidebar.selectbox("Sélectionner une Stratégie", ["BuyAndHold", "Momentum", "MinimumVariance"])
 
 # Paramètres d'entrée
 montant_initial = st.sidebar.number_input("Montant initial (€)", min_value=100, max_value=100000, value=1000)
@@ -61,7 +61,7 @@ entreprises_selectionnees = st.sidebar.multiselect(
 tickers_selectionnes = [ticker for ticker, name in TICKERS_DICT.items() if name in entreprises_selectionnees]
 
 # Paramètres supplémentaires pour la stratégie Momentum
-if strategie_choisie == "Momentum":
+if strategie_choisie == "Momentum" or strategie_choisie=="MinimumVariance":
     if tickers_selectionnes:
         max_assets = len(tickers_selectionnes)
         nombre_actifs = st.sidebar.number_input(
@@ -111,6 +111,13 @@ if st.sidebar.button("Lancer l'analyse"):
         strategie = Momentum(
             montant_initial, tickers_selectionnes, nombre_actifs, periode_reroll, periode_historique, date_investissement, date_fin_investissement
         )
+    elif strategie_choisie == "MinimumVariance" and tickers_selectionnes:
+        logging.info(
+            f"Lancement de la stratégie 'MinimumVariance' : {tickers_selectionnes} | {montant_initial} | {date_investissement} | {date_fin_investissement}"
+        )
+        strategie = MinimumVariance(
+            montant_initial, tickers_selectionnes, nombre_actifs, periode_reroll, periode_historique, date_investissement, date_fin_investissement
+        )
     try:
         # Exécution de la stratégie
         performance_results = strategie.execute()
@@ -120,7 +127,7 @@ if st.sidebar.button("Lancer l'analyse"):
             st.error("Les résultats de la stratégie ne sont pas structurés correctement.")
         else:
             # Création des onglets pour afficher les résultats
-            if strategie_choisie == "Momentum":
+            if strategie_choisie == "Momentum" or strategie_choisie=="MinimumVariance":
                 tabs = st.tabs([
                     "Résumé des Indicateurs",
                     "Graphique des Prix",
@@ -202,7 +209,7 @@ if st.sidebar.button("Lancer l'analyse"):
                         st.plotly_chart(fig)
                     except Exception as e:
                         st.error(f"Erreur lors de l'affichage de l'image : {e}")
-                elif strategie_choisie == "Momentum":
+                elif strategie_choisie == "Momentum"or strategie_choisie=="MinimumVariance":
                     st.subheader("💰 Évolution de la Valeur du Portefeuille")
                     try:
                         dates = performance_results.get("dates", [])
@@ -230,7 +237,7 @@ if st.sidebar.button("Lancer l'analyse"):
                         st.plotly_chart(fig_prices)
                     except Exception as e:
                         st.error(f"Erreur lors de l'affichage des proportions : {e}")
-                elif strategie_choisie == "Momentum":
+                elif strategie_choisie == "Momentum"or strategie_choisie=="MinimumVariance":
                     st.subheader("📊 Taux d'Apparition des Entreprises dans le Portefeuille")
                     try:
                         # Récupérer la répartition des actifs et calculer le taux d'apparition
@@ -314,7 +321,7 @@ if st.sidebar.button("Lancer l'analyse"):
                     st.error(f"Erreur lors de la création de la matrice de corrélation : {e}")
 
                         
-            if strategie_choisie == "Momentum" and len(tabs) > 5:
+            if (strategie_choisie == "Momentum" or strategie_choisie=="MinimumVariance" ) and len(tabs) > 5:
                 # Tableau Récapitulatif
                 with tabs[5]:
                     st.subheader("📝 Tableau Récapitulatif des Investissements")
