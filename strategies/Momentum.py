@@ -16,6 +16,30 @@ class Momentum:
         self.date_fin = pd.to_datetime(date_fin)
         self.data_downloader = DataDownloader()  # Instanciation de DataDownloader
 
+    def validate_data(self, data):
+        """
+        Vérifie et transforme les données pour s'assurer qu'elles sont au bon format.
+        """
+        if data.empty:
+            return data
+
+        # S'assurer que l'index est une colonne temporelle
+        if not pd.api.types.is_datetime64_any_dtype(data.index):
+            data.index = pd.to_datetime(data.index, errors="coerce")
+
+        # Supprimer les colonnes inutiles si MultiIndex
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.droplevel(0)
+
+        # Vérifier les colonnes critiques
+        required_columns = ["Adj Close"]
+        for col in required_columns:
+            if col not in data.columns:
+                raise ValueError(f"Colonne manquante dans les données : {col}")
+
+        # Remplir les valeurs manquantes avec ffill/bfill
+        data = data.ffill().bfill()
+        return data
 
     def calculate_momentum(self, data):
         if len(data) < 2:
@@ -23,12 +47,18 @@ class Momentum:
         return data['Adj Close'].iloc[-1] / data['Adj Close'].iloc[0] - 1
 
     def select_top_assets(self, current_date):
-        start_date = current_date - timedelta(days=self.fenetre_retrospective)
+        start_date = max(pd.to_datetime("2010-01-01"), current_date - timedelta(days=self.fenetre_retrospective))
         momentum_scores = {}
 
         for ticker in self.tickers:
             # Utilisation de DataDownloader pour télécharger les données
             data = self.data_downloader.download_data(ticker, start_date, current_date)
+            try:
+                data = self.validate_data(data)
+            except ValueError as e:
+                print(f"Erreur dans les données pour {ticker} : {e}")
+                continue
+
             if data.empty:
                 print(f"Pas de données pour {ticker} entre {start_date} et {current_date}")
                 continue
@@ -42,7 +72,6 @@ class Momentum:
         selected_assets = [asset[0] for asset in sorted_assets[:self.nombre_actifs]]
         print(f"Actifs sélectionnés à la date {current_date} : {selected_assets}")
         return selected_assets
-
 
     def execute(self):
         portfolio_value = self.montant_initial
@@ -80,6 +109,7 @@ class Momentum:
                 # Exécuter BuyAndHold pour cette période
                 buy_and_hold = BuyAndHold(portfolio_value, current_date, top_assets, date_fin_periode)
                 performance_results = buy_and_hold.execute()
+                print(performance_results)
 
                 # Mise à jour de la valeur du portefeuille
                 portfolio_value += performance_results.get('gain_total', 0)
