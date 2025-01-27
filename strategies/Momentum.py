@@ -47,6 +47,9 @@ class Momentum:
         return data['Adj Close'].iloc[-1] / data['Adj Close'].iloc[0] - 1
 
     def select_top_assets(self, current_date):
+        """
+        Sélectionne les actifs ayant le mieux performé pendant la période fenetre_retrospective.
+        """
         start_date = max(pd.to_datetime("2010-01-01"), current_date - timedelta(days=self.fenetre_retrospective))
         momentum_scores = {}
 
@@ -66,10 +69,11 @@ class Momentum:
             momentum = self.calculate_momentum(data)
             if momentum is not None:
                 momentum_scores[ticker] = momentum
-                print(f"Momentum pour {ticker} : {momentum}")
 
+        # Trier les actifs par momentum décroissant et sélectionner les meilleurs
         sorted_assets = sorted(momentum_scores.items(), key=lambda x: x[1], reverse=True)
         selected_assets = [asset[0] for asset in sorted_assets[:self.nombre_actifs]]
+
         print(f"Actifs sélectionnés à la date {current_date} : {selected_assets}")
         return selected_assets
 
@@ -109,7 +113,6 @@ class Momentum:
                 # Exécuter BuyAndHold pour cette période
                 buy_and_hold = BuyAndHold(portfolio_value, current_date, top_assets, date_fin_periode)
                 performance_results = buy_and_hold.execute()
-                print(performance_results)
 
                 # Mise à jour de la valeur du portefeuille
                 portfolio_value += performance_results.get('gain_total', 0)
