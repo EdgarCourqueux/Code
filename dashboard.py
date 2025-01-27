@@ -5,6 +5,7 @@ from price_data import PriceData
 from strategies.BuyAndHold import BuyAndHold
 from strategies.Momentum import Momentum
 from Indicateurs import Indicateurs
+from strategies.data import DataDownloader
 import pandas as pd
 import plotly.express as px
 import logging
@@ -12,6 +13,7 @@ import logging
 # Exemple de log
 price_lib = PriceData()
 indicateurs=Indicateurs()
+data_downloader = DataDownloader()
 # Charger le fichier des tickers et entreprises
 TICKERS_DICT = price_lib.universe()
 
@@ -79,19 +81,23 @@ else:
 
 # Instancier la stratégie sélectionnée
 strategie = None
+
 def _charger_donnees(tickers_selectionnes, date_investissement, date_fin):
     data_dict = {}
     for ticker in tickers_selectionnes:
         try:
-            data = yf.download(ticker, start="2010-01-01", end=date_fin.strftime('%Y-%m-%d'))
+            data = data_downloader.download_data(ticker, date_investissement, date_fin)
             if not data.empty:
                 data_dict[ticker] = data.reset_index()
             else:
                 print(f"Aucune donnée disponible pour le ticker {ticker}.")
         except Exception as e:
             print(f"Erreur lors du téléchargement des données pour {ticker}: {e}")
+
     return data_dict
+
 data_dict = _charger_donnees(tickers_selectionnes, date_investissement, date_fin_investissement)
+
 if st.sidebar.button("Lancer l'analyse"):
     if strategie_choisie == "BuyAndHold" and tickers_selectionnes:
         logging.info(
@@ -172,7 +178,6 @@ if st.sidebar.button("Lancer l'analyse"):
                         st.metric("CVaR Historique (%)", f"{abs(performance_results.get('CVaR Historique', 0)) * 100:.2f}%")
                     with col3:
                         st.metric("CVaR Cornish-Fisher (%)", f"{abs(performance_results.get('CVaR Cornish-Fisher', 0)) * 100:.2f}%")
-
             # Graphique des Prix
             with tabs[1]:
                 st.subheader("📈 Évolution des Prix Normalisés des Tickers")
