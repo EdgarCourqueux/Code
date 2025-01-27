@@ -34,7 +34,6 @@ class BuyAndHold(Indicateurs):
             except IndexError:
                 print(f"La date d'investissement ou de fin est hors de la plage des données disponibles pour {ticker}.")
                 continue
-
             performance_results = self.performance(data, self.allocation, date_investissement_proche, date_du_jour_proche)
             if performance_results is None:
                 print(f"Erreur dans le calcul de la performance pour {ticker}.")
@@ -42,7 +41,7 @@ class BuyAndHold(Indicateurs):
 
             try:
                 performance_results["volatilite_historique"] = self.volatilite_historique(data).get("volatilite_historique", 0)
-                performance_results["ewma_volatility"] = self.calculate_ewma_volatility(data['Adj Close']).iloc[-1] if not data['Adj Close'].empty else 0
+                #performance_results["ewma_volatility"] = self.calculate_ewma_volatility(data['Adj Close']).iloc[-1] if not data['Adj Close'].empty else 0
                 performance_results["var_parametric"] = self.calculate_var(data, alpha=0.05, method="parametric")
                 performance_results["var_historical"] = self.calculate_var(data, alpha=0.05, method="historical")
                 performance_results["var_cornish_fisher"] = self.calculate_var(data, alpha=0.05, method="cornish-fisher")
