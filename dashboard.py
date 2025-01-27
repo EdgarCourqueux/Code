@@ -11,7 +11,7 @@ import logging
 
 # Exemple de log
 price_lib = PriceData()
-
+indicateurs=Indicateurs()
 # Charger le fichier des tickers et entreprises
 TICKERS_DICT = price_lib.universe()
 
@@ -79,21 +79,32 @@ else:
 
 # Instancier la stratégie sélectionnée
 strategie = None
-if strategie_choisie == "BuyAndHold" and tickers_selectionnes:
-    logging.info(
-        f"Lancement de la stratégie 'BuyAndHold' : {tickers_selectionnes} | {montant_initial} | {date_investissement} | {date_fin_investissement}"
-    )
-    strategie = BuyAndHold(montant_initial, date_investissement, tickers_selectionnes, date_fin_investissement)
-elif strategie_choisie == "Momentum" and tickers_selectionnes and nombre_actifs and periode_reroll and periode_historique:
-    logging.info(
-        f"Lancement de la stratégie 'Momentum' : {tickers_selectionnes} | {montant_initial} | {nombre_actifs} | {periode_reroll} | {periode_historique} | {date_investissement} | {date_fin_investissement}"
-    )
-    strategie = Momentum(
-        montant_initial, tickers_selectionnes, nombre_actifs, periode_reroll, periode_historique, date_investissement, date_fin_investissement
-    )
-
-# Exécuter la stratégie
-if st.sidebar.button("Lancer l'analyse") and strategie:
+def _charger_donnees(tickers_selectionnes, date_investissement, date_fin):
+    data_dict = {}
+    for ticker in tickers_selectionnes:
+        try:
+            data = yf.download(ticker, start="2010-01-01", end=date_fin.strftime('%Y-%m-%d'))
+            if not data.empty:
+                data_dict[ticker] = data.reset_index()
+            else:
+                print(f"Aucune donnée disponible pour le ticker {ticker}.")
+        except Exception as e:
+            print(f"Erreur lors du téléchargement des données pour {ticker}: {e}")
+    return data_dict
+data_dict = _charger_donnees(tickers_selectionnes, date_investissement, date_fin_investissement)
+if st.sidebar.button("Lancer l'analyse"):
+    if strategie_choisie == "BuyAndHold" and tickers_selectionnes:
+        logging.info(
+            f"Lancement de la stratégie 'BuyAndHold' : {tickers_selectionnes} | {montant_initial} | {date_investissement} | {date_fin_investissement}"
+        )
+        strategie = BuyAndHold(montant_initial, date_investissement, tickers_selectionnes, date_fin_investissement)
+    elif strategie_choisie == "Momentum" and tickers_selectionnes and nombre_actifs and periode_reroll and periode_historique:
+        logging.info(
+            f"Lancement de la stratégie 'Momentum' : {tickers_selectionnes} | {montant_initial} | {nombre_actifs} | {periode_reroll} | {periode_historique} | {date_investissement} | {date_fin_investissement}"
+        )
+        strategie = Momentum(
+            montant_initial, tickers_selectionnes, nombre_actifs, periode_reroll, periode_historique, date_investissement, date_fin_investissement
+        )
     try:
         # Exécution de la stratégie
         performance_results = strategie.execute()
@@ -103,9 +114,23 @@ if st.sidebar.button("Lancer l'analyse") and strategie:
             st.error("Les résultats de la stratégie ne sont pas structurés correctement.")
         else:
             # Création des onglets pour afficher les résultats
-            tabs = st.tabs(
-                ["Résumé des Indicateurs", "Graphique des Prix", "Valeur du Portefeuille", "Proportions", "Matrice de Corrélation"]
-            )
+            if strategie_choisie == "Momentum":
+                tabs = st.tabs([
+                    "Résumé des Indicateurs",
+                    "Graphique des Prix",
+                    "Valeur du Portefeuille",
+                    "Proportions",
+                    "Matrice de Corrélation",
+                    "Tableau Récapitulatif",
+                ])
+            else:
+                tabs = st.tabs([
+                    "Résumé des Indicateurs",
+                    "Graphique des Prix",
+                    "Valeur du Portefeuille",
+                    "Proportions",
+                    "Matrice de Corrélation",
+                ])
 
             with tabs[0]:
                 st.subheader("📊 Résumé des Indicateurs")
@@ -114,7 +139,7 @@ if st.sidebar.button("Lancer l'analyse") and strategie:
                 st.markdown("### Gains et Performance")
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Gain Total (€)", f"{performance_results.get('gain_total', 0):.2f}€")
+                    st.metric("Gain Total (€)", f"{performance_results.get('gain_total', 0):,.2f}€")
                 with col2:
                     st.metric("Pourcentage Gain Total (%)", f"{performance_results.get('pourcentage_gain_total', 0):.2f}%")
                 with col3:
@@ -124,35 +149,36 @@ if st.sidebar.button("Lancer l'analyse") and strategie:
                 with st.expander("Volatilité"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.metric("Volatilité Historique (%)", f"{performance_results.get('volatilite_historique', 0)*100:.2f}%")
+                        st.metric("Volatilité Historique (%)", f"{performance_results.get('volatilite_historique', 0) * 100:.2f}%")
                     with col2:
-                        st.metric("Volatilité EWMA (%)", f"{performance_results.get('ewma_volatility', 0)*100:.2f}%")
+                        st.metric("Volatilité EWMA (%)", f"{performance_results.get('ewma_volatility', 0) * 100:.2f}%")
 
                 # Value at Risk (VaR)
                 with st.expander("Value at Risk (VaR)"):
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        st.metric("VaR Paramétrique (%)", f"{abs(performance_results.get('VaR Paramétrique', 0))*100:.2f}%")
+                        st.metric("VaR Paramétrique (%)", f"{abs(performance_results.get('VaR Paramétrique', 0)) * 100:.2f}%")
                     with col2:
-                        st.metric("VaR Historique (%)", f"{abs(performance_results.get('VaR Historique', 0))*100:.2f}%")
+                        st.metric("VaR Historique (%)", f"{abs(performance_results.get('VaR Historique', 0)) * 100:.2f}%")
                     with col3:
-                        st.metric("VaR Cornish-Fisher (%)", f"{abs(performance_results.get('VaR Cornish-Fisher', 0))*100:.2f}%")
+                        st.metric("VaR Cornish-Fisher (%)", f"{abs(performance_results.get('VaR Cornish-Fisher', 0)) * 100:.2f}%")
 
                 # Conditional VaR (CVaR)
                 with st.expander("Conditional VaR (CVaR)"):
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        st.metric("CVaR Paramétrique (%)", f"{abs(performance_results.get('CVaR Paramétrique', 0))*100:.2f}%")
+                        st.metric("CVaR Paramétrique (%)", f"{abs(performance_results.get('CVaR Paramétrique', 0)) * 100:.2f}%")
                     with col2:
-                        st.metric("CVaR Historique (%)", f"{abs(performance_results.get('CVaR Historique', 0))*100:.2f}%")
+                        st.metric("CVaR Historique (%)", f"{abs(performance_results.get('CVaR Historique', 0)) * 100:.2f}%")
                     with col3:
-                        st.metric("CVaR Cornish-Fisher (%)", f"{abs(performance_results.get('CVaR Cornish-Fisher', 0))*100:.2f}%")
+                        st.metric("CVaR Cornish-Fisher (%)", f"{abs(performance_results.get('CVaR Cornish-Fisher', 0)) * 100:.2f}%")
 
             # Graphique des Prix
             with tabs[1]:
                 st.subheader("📈 Évolution des Prix Normalisés des Tickers")
                 try:
-                    fig_prices = Indicateurs.afficher_graphique_interactif(
+                    fig_prices = indicateurs.afficher_graphique_interactif(
+                        data_dict=data_dict,
                         tickers_selectionnes=tickers_selectionnes,
                         montant_initial=montant_initial,
                         date_investissement=date_investissement,
@@ -161,15 +187,14 @@ if st.sidebar.button("Lancer l'analyse") and strategie:
                     st.plotly_chart(fig_prices)
                 except Exception as e:
                     st.error(f"Erreur lors de la création du graphique : {e}")
-            # Valeur du Portefeuille
+
+            # Valeur du Portefeuille 
             with tabs[2]:
                 if strategie_choisie=="BuyAndHold":
                     st.subheader("💰 Évolution de la Valeur du Portefeuille")
                     try:
-                        from PIL import Image
-
-                        image = Image.open("graph_multi_tickers.png")
-                        st.image(image, use_column_width=True)
+                        fig = indicateurs._graphique_valeur_portefeuille(data_dict, montant_initial,tickers_selectionnes,date_investissement,date_fin_investissement)
+                        st.plotly_chart(fig)
                     except Exception as e:
                         st.error(f"Erreur lors de l'affichage de l'image : {e}")
                 elif strategie_choisie == "Momentum":
@@ -190,8 +215,14 @@ if st.sidebar.button("Lancer l'analyse") and strategie:
                 if strategie_choisie=="BuyAndHold":
                     st.subheader("📊 Proportions des Entreprises dans le Portefeuille")
                     try:
-                        image = Image.open("graph_proportions_tickers.png")
-                        st.image(image, use_column_width=True)
+                        fig_prices = indicateurs._graphique_proportions(
+                            data_dict=data_dict,
+                            montant_initial=montant_initial,
+                            tickers_selectionnes=tickers_selectionnes,
+                            date_investissement=date_investissement,
+                            date_fin=date_fin_investissement,
+                        )
+                        st.plotly_chart(fig_prices)
                     except Exception as e:
                         st.error(f"Erreur lors de l'affichage des proportions : {e}")
                 elif strategie_choisie == "Momentum":
@@ -260,30 +291,70 @@ if st.sidebar.button("Lancer l'analyse") and strategie:
                     except Exception as e:
                         st.error(f"Erreur lors de l'affichage de la répartition dynamique : {e}")
 
-
-
             # Matrice de Corrélation
             with tabs[4]:
                 st.subheader("🔗 Matrice de Corrélation des Entreprises")
                 try:
-                    if len(tickers_selectionnes) == 0:
-                        st.error("Veuillez sélectionner au moins une entreprise pour calculer la matrice de corrélation.")
-                    else:
-                        correlation_matrix = Indicateurs.matrice_correlation(
-                            tickers_selectionnes,
-                            start_date=date_investissement.strftime('%Y-%m-%d'),
-                            end_date=date_fin_investissement.strftime('%Y-%m-%d')
-                        )
-                        fig_corr = px.imshow(
-                            correlation_matrix,
-                            text_auto=True,
-                            color_continuous_scale="RdBu_r",
-                            title="Matrice de Corrélation des Rendements Journaliers",
-                        )
-                        st.plotly_chart(fig_corr)
+                    # Calcul de la matrice de corrélation
+                    correlation_matrix = indicateurs.matrice_correlation(data_dict,tickers_selectionnes,date_investissement,date_fin_investissement)
+                    # Création de la visualisation avec Plotly
+                    fig_corr = px.imshow(
+                        correlation_matrix,
+                        text_auto=True,
+                        color_continuous_scale="RdBu_r",
+                        title="Matrice de Corrélation des Rendements Journaliers",
+                    )
+                    st.plotly_chart(fig_corr)
                 except Exception as e:
                     st.error(f"Erreur lors de la création de la matrice de corrélation : {e}")
 
+                        
+            if strategie_choisie == "Momentum" and len(tabs) > 5:
+                # Tableau Récapitulatif
+                with tabs[5]:
+                    st.subheader("📝 Tableau Récapitulatif des Investissements")
+                    try:
+                        # Initialisation du tableau récapitulatif
+                        investment_summary = []
+
+                        # Récupération des données
+                        dates = performance_results.get("dates", [])
+                        valeurs_portefeuille = performance_results.get("valeurs_portefeuille", [])
+                        actifs_selectionnes = performance_results.get("actifs_selectionnes", [])
+                        valeurs_momentum = performance_results.get("valeurs_momentum", [])  # Assurez-vous que cette clé existe
+                        performances_buy_and_hold = performance_results.get("performances_buy_and_hold", [])  # Performances en %
+
+                        # Vérification de la présence des données
+                        if dates and valeurs_portefeuille and actifs_selectionnes and valeurs_momentum and performances_buy_and_hold:
+                            for i in range(len(dates) - 1):
+                                # Dates de début et de fin
+                                start_date = dates[i].date()
+                                end_date = dates[i + 1].date()
+                                portefeuille_value = valeurs_portefeuille[i + 1]
+                                valeur_momentum = valeurs_momentum[i + 1] if i + 1 < len(valeurs_momentum) else None
+                                performance_buy_and_hold = performances_buy_and_hold[i] if i < len(performances_buy_and_hold) else None
+
+                                # Extraction des actifs sélectionnés pour cette période
+                                actifs = actifs_selectionnes[i]["Actifs sélectionnés"] if i < len(actifs_selectionnes) else []
+
+                                # Ajout au tableau récapitulatif
+                                investment_summary.append({
+                                    "Date de début": start_date,
+                                    "Date de fin": end_date,
+                                    "Valeur cumulative du portefeuille (€)": portefeuille_value,
+                                    "Performance Buy and Hold (%)": f"{performance_buy_and_hold:.2f} %" if performance_buy_and_hold is not None else "N/A",
+                                    "Actifs sélectionnés": ", ".join(actifs)
+                                })
+
+                            # Création d'un DataFrame
+                            df_summary = pd.DataFrame(investment_summary)
+
+                            # Affichage du tableau dans Streamlit
+                            st.dataframe(df_summary)
+                        else:
+                            st.error("Données insuffisantes pour afficher le tableau récapitulatif.")
+                    except Exception as e:
+                        st.error(f"Erreur lors de la création du tableau récapitulatif : {e}")
 
     except Exception as e:
         st.error(f"Erreur lors de l'exécution de la stratégie : {e}")
