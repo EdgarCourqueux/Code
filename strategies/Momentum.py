@@ -15,18 +15,20 @@ class Momentum:
         self.date_fin = pd.to_datetime(date_fin)
 
     def get_data(self, ticker, start_date, end_date):
+        """
+        Télécharge les données historiques pour un ticker donné à partir de Yahoo Finance.
+        """
         try:
+            # Téléchargement des données via yfinance
             data = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
-            if not data.empty:
-                data.reset_index(inplace=True)
-                data['Date'] = pd.to_datetime(data['Date'])
+            if data.empty:
+                print(f"Aucune donnée disponible pour {ticker} entre {start_date} et {end_date}")
             return data
         except Exception as e:
             print(f"Erreur lors du téléchargement des données pour {ticker}: {e}")
             return pd.DataFrame()
 
-    def calculate_momentum(self, data, start_date, end_date):
-        data = data[(data['Date'] >= start_date) & (data['Date'] <= end_date)]
+    def calculate_momentum(self, data):
         if len(data) < 2:
             return None
         return data['Adj Close'].iloc[-1] / data['Adj Close'].iloc[0] - 1
@@ -38,21 +40,30 @@ class Momentum:
         for ticker in self.tickers:
             data = self.get_data(ticker, start_date, current_date)
             if data.empty:
+                print(f"Pas de données pour {ticker} entre {start_date} et {current_date}")
                 continue
-            momentum = self.calculate_momentum(data, start_date, current_date)
+
+            momentum = self.calculate_momentum(data)
             if momentum is not None:
                 momentum_scores[ticker] = momentum
+                print(f"Momentum pour {ticker} : {momentum}")
 
         sorted_assets = sorted(momentum_scores.items(), key=lambda x: x[1], reverse=True)
-        return [asset[0] for asset in sorted_assets[:self.nombre_actifs]]
+        selected_assets = [asset[0] for asset in sorted_assets[:self.nombre_actifs]]
+        print(f"Actifs sélectionnés à la date {current_date} : {selected_assets}")
+        return selected_assets
+
 
     def execute(self):
-        portfolio_value = self.montant_initial  # Valeur initiale correcte
+        portfolio_value = self.montant_initial
         current_date = self.date_debut
 
         # Résultats pour les graphiques
         dates = []
-        valeurs_portefeuille = [self.montant_initial]  # Ajoutez la valeur initiale ici
+        valeurs_portefeuille = [self.montant_initial]
+        actifs_selectionnes = []
+        valeurs_momentum = []
+        performances_buy_and_hold = []
         repartition = pd.DataFrame()
         buy_and_hold_indicators = {}
 
@@ -66,6 +77,8 @@ class Momentum:
 
             # Sélectionner les meilleurs actifs
             top_assets = self.select_top_assets(current_date)
+            actifs_selectionnes.append({"Actifs sélectionnés": top_assets})
+
             if not top_assets:
                 print("Aucun actif sélectionné.")
                 break
@@ -82,6 +95,12 @@ class Momentum:
                 portfolio_value += performance_results.get('gain_total', 0)
                 valeurs_portefeuille.append(portfolio_value)
 
+                # Ajouter les performances buy and hold
+                performances_buy_and_hold.append(performance_results.get('pourcentage_gain_total', None))
+
+                # Ajouter la valeur momentum pour cette période
+                valeurs_momentum.append(performance_results.get('gain_total', 0))
+
                 # Mise à jour de la répartition
                 allocation = {asset: 1 / len(top_assets) for asset in top_assets}
                 repartition_current = pd.DataFrame([allocation], index=[current_date])
@@ -91,7 +110,7 @@ class Momentum:
                 for asset in top_assets:
                     asset_occurrences[asset] += 1
 
-                # Ajouter les indicateurs supplémentaires de BuyAndHold, sauf ceux déjà présents
+                # Ajouter les indicateurs supplémentaires de BuyAndHold
                 for key, value in performance_results.items():
                     if key not in ["gain_total", "pourcentage_gain_total", "dates", "valeurs_portefeuille", "repartition", "performance_annualisee"]:
                         buy_and_hold_indicators[key] = value
@@ -113,10 +132,13 @@ class Momentum:
         return {
             "dates": dates,
             "valeurs_portefeuille": valeurs_portefeuille,
+            "actifs_selectionnes": actifs_selectionnes,
+            "valeurs_momentum": valeurs_momentum,
+            "performances_buy_and_hold": performances_buy_and_hold,
             "repartition": repartition,
             "gain_total": portfolio_value - self.montant_initial,
             "pourcentage_gain_total": (portfolio_value / self.montant_initial - 1) * 100,
             "performance_annualisee": performance_annualisee * 100,
-            "taux_apparition": asset_appearance_rate,  # Ajouter le taux d'apparition
+            "taux_apparition": asset_appearance_rate,
             **buy_and_hold_indicators,
         }
