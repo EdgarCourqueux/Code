@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 from strategies.BuyAndHold import BuyAndHold
+from strategies.data import DataDownloader
 
 class Momentum:
     def __init__(self, montant_initial, tickers, nombre_actifs, periode_reroll, fenetre_retrospective, date_debut, date_fin):
@@ -13,20 +14,8 @@ class Momentum:
         self.fenetre_retrospective = fenetre_retrospective
         self.date_debut = pd.to_datetime(date_debut)
         self.date_fin = pd.to_datetime(date_fin)
+        self.data_downloader = DataDownloader()  # Instanciation de DataDownloader
 
-    def get_data(self, ticker, start_date, end_date):
-        """
-        Télécharge les données historiques pour un ticker donné à partir de Yahoo Finance.
-        """
-        try:
-            # Téléchargement des données via yfinance
-            data = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
-            if data.empty:
-                print(f"Aucune donnée disponible pour {ticker} entre {start_date} et {end_date}")
-            return data
-        except Exception as e:
-            print(f"Erreur lors du téléchargement des données pour {ticker}: {e}")
-            return pd.DataFrame()
 
     def calculate_momentum(self, data):
         if len(data) < 2:
@@ -38,7 +27,8 @@ class Momentum:
         momentum_scores = {}
 
         for ticker in self.tickers:
-            data = self.get_data(ticker, start_date, current_date)
+            # Utilisation de DataDownloader pour télécharger les données
+            data = self.data_downloader.download_data(ticker, start_date, current_date)
             if data.empty:
                 print(f"Pas de données pour {ticker} entre {start_date} et {current_date}")
                 continue
