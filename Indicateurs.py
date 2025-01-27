@@ -7,121 +7,149 @@ from datetime import datetime
 import yfinance as yf
 import plotly.express as px
 import matplotlib.dates as mdates
+import os
+import pickle
 
 class Indicateurs:
 
     ######################PERFORMANCE#########################################
     def performance(self, df, montant_initial, date_initiale, date_finale):
-        # Convertir les colonnes de dates en format datetime sans spécifier de format explicite
+        # Vérifier que le DataFrame contient une colonne 'Adj Close'
+        if 'Adj Close' not in df.columns:
+            raise ValueError(f"La colonne 'Adj Close' est absente ou mal formatée.")
+
+        # Vérifier si le DataFrame est vide après filtrage
         df['Date'] = pd.to_datetime(df['Date'])
-        date_initiale = pd.to_datetime(date_initiale)
-        date_finale = pd.to_datetime(date_finale)
-        
-        # Filtrer les données entre les dates spécifiées
-        df_filtered = df[(df['Date'] >= date_initiale) & (df['Date'] <= date_finale)].copy()
+        df_filtered = df[(df['Date'] >= pd.to_datetime(date_initiale)) & (df['Date'] <= pd.to_datetime(date_finale))]
+
         if df_filtered.empty:
             raise ValueError("Aucune donnée disponible pour la période spécifiée.")
-        
-        # Calcul des prix et des performances
+
+        # Calculer les métriques
         prix_initial = df_filtered.iloc[0]['Adj Close']
         prix_final = df_filtered.iloc[-1]['Adj Close']
-        nb_jours = (df_filtered['Date'].iloc[-1] - df_filtered['Date'].iloc[0]).days
+
+        if prix_initial is None or prix_final is None:
+            raise ValueError("Prix initial ou final non disponible.")
+
         pourcentage_gain_total = (prix_final - prix_initial) / prix_initial * 100
         gain_total = montant_initial * (prix_final / prix_initial - 1)
-        performance_annualisee = ((prix_final / prix_initial) ** (365 / nb_jours) - 1) * 100
-        
-        # Performance journalière
-        df_filtered['Daily_Performance'] = df_filtered['Adj Close'].pct_change() * 100
-
-        # Résumé par semaine et par mois
-        df_resampled_weekly = df_filtered.resample('W-WED', on='Date').last()
-        df_resampled_weekly['Weekly_Performance'] = df_resampled_weekly['Adj Close'].pct_change() * 100
-        df_resampled_monthly = df_filtered.resample('ME', on='Date').last()
-        df_resampled_monthly['Monthly_Performance'] = df_resampled_monthly['Adj Close'].pct_change() * 100
+        performance_annualisee = ((prix_final / prix_initial) ** (365 / len(df_filtered)) - 1) * 100
 
         return {
             "pourcentage_gain_total": pourcentage_gain_total,
             "gain_total": gain_total,
             "prix_initial": prix_initial,
             "prix_final": prix_final,
-            "performance_annualisee": performance_annualisee,
-            "daily_performance": df_filtered[['Date', 'Adj Close', 'Daily_Performance']],
-            "weekly_performance": df_resampled_weekly[['Adj Close', 'Weekly_Performance']],
-            "monthly_performance": df_resampled_monthly[['Adj Close', 'Monthly_Performance']]
+            "performance_annualisee": performance_annualisee
         }
+
+
     ######################Graphique#########################################
-    def matrice_correlation(tickers_selectionnes, start_date="2010-01-01", end_date=None):
-        if end_date is None:
-            end_date = datetime.now().strftime('%Y-%m-%d')
-        
-        if not isinstance(tickers_selectionnes, list) or len(tickers_selectionnes) == 0:
-            raise ValueError("tickers_selectionnes doit être une liste non vide.")
+    def matrice_correlation(self,data_dict,tickers_selectionnes, date_debut, date_fin):
+        """
+        Calcule la matrice de corrélation des rendements journaliers pour une liste de tickers.
 
-        # Télécharger les données pour chaque ticker
-        data_dict = {}
-        for ticker in tickers_selectionnes:
-            try:
-                data = yf.download(ticker, start=start_date, end=end_date)['Adj Close']
-                if not data.empty:
-                    data_dict[ticker] = data
-            except Exception as e:
-                print(f"Erreur lors du téléchargement des données pour {ticker}: {e}")
-        
-        # Vérifier si des données valides ont été collectées
-        if len(data_dict) == 0:
-            raise ValueError("Aucune donnée valide n'a été collectée pour les tickers sélectionnés.")
+        :param tickers_selectionnes: list, Liste des tickers à analyser.
+        :param date_debut: str, La date de début (format 'YYYY-MM-DD').
+        :param date_fin: str, La date de fin (format 'YYYY-MM-DD').
+        :return: DataFrame, Matrice de corrélation des rendements journaliers.
+        """
+        try:
+            # Charger les données des tickers sélectionnés
 
-        # Convertir les données en DataFrame
-        df_prices = pd.DataFrame(data_dict)
-        
-        # Calculer les rendements journaliers
-        df_returns = df_prices.pct_change().dropna()
 
-        # Calculer la matrice de corrélation
-        correlation_matrix = df_returns.corr()
+            # Créer un DataFrame pour contenir les rendements journaliers de chaque entreprise
+            rendement_df = pd.DataFrame()
 
-        return correlation_matrix
+            for ticker, df in data_dict.items():
+                # Vérifier si la colonne 'Adj Close' existe
+                if 'Adj Close' not in df.columns:
+                    raise ValueError(f"La colonne 'Adj Close' est absente pour {ticker}.")
 
-    def afficher_graphique_interactif(tickers_selectionnes, montant_initial, date_investissement, date_fin):
-        data_dict = {
-            ticker: yf.download(ticker, start="2010-01-01", end=date_fin.strftime('%Y-%m-%d')).reset_index()
-            for ticker in tickers_selectionnes
-        }
+                # Calculer les rendements journaliers (logarithmiques pour la stabilité)
+                df = df.sort_values(by='Date')
+                df['Rendement'] = np.log(df['Adj Close'] / df['Adj Close'].shift(1))
+
+                # Ajouter les rendements au DataFrame principal
+                rendement_df[ticker] = df['Rendement']
+
+            # Supprimer les lignes contenant des NaN
+            rendement_df.dropna(inplace=True)
+
+            # Calculer la matrice de corrélation
+            correlation_matrix = rendement_df.corr()
+
+            return correlation_matrix
+
+        except Exception as e:
+            raise ValueError(f"Erreur lors du calcul de la matrice de corrélation : {e}")
+
+
+
+
+
+    
+
+    def afficher_graphique_interactif(self, data_dict,tickers_selectionnes, montant_initial, date_investissement, date_fin):
+        # Graphique de l'évolution des prix
+        fig_prices = self._graphique_evolution_prix(data_dict, date_investissement, date_fin)
+        # Graphique des proportions des tickers dans le portefeuille
+        self._graphique_proportions(data_dict, montant_initial, tickers_selectionnes, date_investissement, date_fin)
+        return fig_prices
+
+
+
+    def _graphique_evolution_prix(self, data_dict, date_investissement, date_fin):
+        # Fixer la date minimale à 2010
+        date_debut = pd.to_datetime("2010-01-01")
+        date_investissement = pd.to_datetime(date_investissement)
+        date_fin = pd.to_datetime(date_fin)
+
+        # S'assurer que la date d'investissement ne précède pas 2010
+        if date_investissement < date_debut:
+            date_investissement = date_debut
 
         fig_prices = go.Figure()
         for ticker, data in data_dict.items():
-            data['Date'] = pd.to_datetime(data['Date'])
-            data = data.sort_values(by='Date')
+            if not data.empty:
+                data['Date'] = pd.to_datetime(data['Date'], errors='coerce')  # Convertir les dates
+                data = data.sort_values(by='Date')
 
-            # Tracé des lignes de prix de clôture
-            fig_prices.add_trace(go.Scatter(
-                x=data['Date'],
-                y=data['Adj Close'],
-                mode='lines',
-                name=f"{ticker} (Prix de Clôture)"
-            ))
+                # Filtrer les données pour commencer à partir de 2010
+                data = data[data['Date'] >= date_debut]
 
-            # Ajouter un point vert pour le début de l'investissement
-            data_invest = data[(data['Date'] >= date_investissement) & (data['Date'] <= date_fin)]
-            if not data_invest.empty:
-                prix_investissement = data_invest['Adj Close'].iloc[0]
+                # Tracé des lignes de prix de clôture
                 fig_prices.add_trace(go.Scatter(
-                    x=[date_investissement],
-                    y=[prix_investissement],
-                    mode='markers',
-                    marker=dict(color='green', size=10),
-                    name=f"Début Investissement {ticker}"
+                    x=data['Date'],
+                    y=data['Adj Close'],
+                    mode='lines',
+                    name=f"{ticker} (Prix de Clôture)"
                 ))
 
-                # Ajouter un point rouge pour la fin de l'investissement
-                prix_fin_investissement = data_invest['Adj Close'].iloc[-1]
-                fig_prices.add_trace(go.Scatter(
-                    x=[date_fin],
-                    y=[prix_fin_investissement],
-                    mode='markers',
-                    marker=dict(color='red', size=10),
-                    name=f"Fin Investissement {ticker}"
-                ))
+                # Filtrage des données pour les points d'investissement
+                data_invest = data[
+                    (data['Date'] >= date_investissement) &
+                    (data['Date'] <= date_fin)
+                ]
+                if not data_invest.empty:
+                    prix_investissement = data_invest['Adj Close'].iloc[0]
+                    fig_prices.add_trace(go.Scatter(
+                        x=[date_investissement],
+                        y=[prix_investissement],
+                        mode='markers',
+                        marker=dict(color='green', size=10),
+                        name=f"Début Investissement {ticker}"
+                    ))
+
+                    prix_fin_investissement = data_invest['Adj Close'].iloc[-1]
+                    fig_prices.add_trace(go.Scatter(
+                        x=[date_fin],
+                        y=[prix_fin_investissement],
+                        mode='markers',
+                        marker=dict(color='red', size=10),
+                        name=f"Fin Investissement {ticker}"
+                    ))
 
         fig_prices.update_layout(
             title=f"📈 Évolution des Prix des Tickers ({date_investissement.date()} - {date_fin.date()})",
@@ -129,104 +157,133 @@ class Indicateurs:
             yaxis_title="Prix de Clôture",
             hovermode="x unified"
         )
+        return fig_prices
 
-        # Normalisation des valeurs des tickers pour calculer la proportion du portefeuille
+
+
+    def _graphique_valeur_portefeuille(self, data_dict, montant_initial, tickers_selectionnes, date_investissement, date_fin):
+        date_investissement = pd.to_datetime(date_investissement)
+        date_fin = pd.to_datetime(date_fin)
+
+        portfolio_values = []
+        fig = go.Figure()
+
+        # Ajout des courbes des actions
+        for ticker, data in data_dict.items():
+            if not data.empty:
+                data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
+                data_invest = data[
+                    (data['Date'] >= date_investissement) &
+                    (data['Date'] <= date_fin)
+                ]
+                if not data_invest.empty:
+                    prix_investissement = data_invest['Adj Close'].iloc[0]
+                    montant_investissement_ticker = montant_initial / len(tickers_selectionnes) * (
+                        data_invest['Adj Close'] / prix_investissement
+                    )
+                    montant_investissement_ticker.index = data_invest['Date']
+                    portfolio_values.append(montant_investissement_ticker)
+
+                    # Ajouter la courbe du cours de l'action
+                    fig.add_trace(go.Scatter(
+                        x=data_invest['Date'],
+                        y=data_invest['Adj Close'],
+                        mode='lines',
+                        name=f"Cours {ticker} (échelle secondaire)",
+                        yaxis='y2'  # Associer à l'axe secondaire
+                    ))
+
+        # Calculer la valeur totale normalisée du portefeuille
+        if portfolio_values:
+            df_portfolio = pd.concat(portfolio_values, axis=1).ffill()
+            df_portfolio['Montant_Total'] = df_portfolio.sum(axis=1)
+
+            # Ajouter la courbe de la valeur totale du portefeuille
+            fig.add_trace(go.Scatter(
+                x=df_portfolio.index,
+                y=df_portfolio['Montant_Total'],
+                mode='lines',
+                name="Valeur totale du portefeuille",
+                line=dict(width=2, dash='solid')
+            ))
+
+            # Mettre à jour la mise en page pour inclure un axe secondaire
+            fig.update_layout(
+                title="📈 Évolution de la Valeur Normalisée du Portefeuille et des Cours des Actions",
+                xaxis=dict(title="Date"),
+                yaxis=dict(
+                    title="Valeur totale du portefeuille (€)",
+                    side='left'
+                ),
+                yaxis2=dict(
+                    title="Cours des actions (€)",
+                    overlaying='y',
+                    side='right'
+                ),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                hovermode="x unified"
+            )
+
+            return fig
+        else:
+            print("Aucune donnée pour la valeur du portefeuille.")
+            return None
+
+
+
+    def _graphique_proportions(self, data_dict, montant_initial, tickers_selectionnes, date_investissement, date_fin):
         portfolio_values = []
         for ticker, data in data_dict.items():
-            data['Date'] = pd.to_datetime(data['Date'])
-            data_invest = data[(data['Date'] >= date_investissement) & (data['Date'] <= date_fin)].copy()
-            prix_investissement = data_invest['Adj Close'].iloc[0]
-            montant_investissement_ticker = montant_initial / len(tickers_selectionnes) * (data_invest['Adj Close'] / prix_investissement)
-            montant_investissement_ticker.index = data_invest['Date']
-            montant_investissement_ticker = montant_investissement_ticker.rename(f"Montant_{ticker}")
-            portfolio_values.append(montant_investissement_ticker)
+            if not data.empty:
+                data['Date'] = pd.to_datetime(data['Date'], errors='coerce')  # Assurer la conversion des dates
+                data_invest = data[(data['Date'] >= pd.Timestamp(date_investissement)) & (data['Date'] <= pd.Timestamp(date_fin))]
+                if not data_invest.empty:
+                    prix_investissement = data_invest['Adj Close'].iloc[0]
+                    montant_investissement_ticker = montant_initial / len(tickers_selectionnes) * (
+                            data_invest['Adj Close'] / prix_investissement)
+                    montant_investissement_ticker.index = data_invest['Date']
+                    montant_investissement_ticker = montant_investissement_ticker.rename(f"Montant_{ticker}")
+                    portfolio_values.append(montant_investissement_ticker)
 
-        df_portfolio = pd.concat(portfolio_values, axis=1).ffill()
-        df_portfolio['Montant_Total'] = df_portfolio.sum(axis=1)
+        if portfolio_values:
+            df_portfolio = pd.concat(portfolio_values, axis=1).ffill()
+            df_portfolio['Montant_Total'] = df_portfolio.sum(axis=1)
 
-        for ticker in tickers_selectionnes:
-            df_portfolio[f'{ticker}_Proportion'] = (df_portfolio[f"Montant_{ticker}"] / df_portfolio['Montant_Total']) * 100
+            # Calculer les proportions
+            proportions = {}
+            for ticker in tickers_selectionnes:
+                if f"Montant_{ticker}" in df_portfolio.columns:
+                    df_portfolio[f"{ticker}_Proportion"] = (
+                        df_portfolio[f"Montant_{ticker}"] / df_portfolio['Montant_Total']
+                    ) * 100
+                    proportions[ticker] = df_portfolio[f"{ticker}_Proportion"]
 
-        fig, ax1 = plt.subplots(figsize=(10, 8))
+            # Préparer les données pour le graphique interactif
+            df_proportions = pd.DataFrame(proportions)
+            df_proportions['Date'] = df_portfolio.index
+            df_proportions = df_proportions.melt(id_vars="Date", var_name="Entreprise", value_name="Proportion")
 
-        normalised_values = {}
-        for ticker in tickers_selectionnes:
-            if f"Montant_{ticker}" in df_portfolio:
-                normalised_values[ticker] = (
-                    df_portfolio[f"Montant_{ticker}"] - df_portfolio[f"Montant_{ticker}"].iloc[0]
-                )
-                ax1.plot(
-                    df_portfolio.index,
-                    normalised_values[ticker],
-                    label=f"Valeur normalisée de {ticker}",
-                    linestyle="--"
-                )
+            # Créer le graphique interactif
+            fig = px.area(
+                df_proportions,
+                x="Date",
+                y="Proportion",
+                color="Entreprise",
+                title="Proportions des Entreprises dans le Portefeuille au Fil du Temps",
+                labels={"Proportion": "Proportion (%)", "Date": "Date", "Entreprise": "Entreprises"},
+            )
+            fig.update_layout(
+                xaxis_title="Date",
+                yaxis_title="Proportion (%)",
+                hovermode="x unified",
+                legend_title="Entreprises",
+            )
 
-        ax1.set_xlabel("Date")
-        ax1.set_ylabel("Valeur Normalisée des Entreprises (€)")
-        ax1.grid(True)
+            return fig
+        else:
+            print("Aucune donnée pour les proportions.")
+            return None
 
-        ax2 = ax1.twinx()
-        df_portfolio["Montant_Total_Normalise"] = (
-            df_portfolio["Montant_Total"] - df_portfolio["Montant_Total"].iloc[0]
-        )
-        ax2.plot(
-            df_portfolio.index,
-            df_portfolio["Montant_Total_Normalise"],
-            label="Valeur normalisée du Portefeuille Total",
-            linewidth=2.5,
-            color="black"
-        )
-        ax2.set_ylabel("Valeur Normalisée du Portefeuille (€)", color="black")
-        ax2.tick_params(axis='y', labelcolor="black")
-
-        lines_1, labels_1 = ax1.get_legend_handles_labels()
-        lines_2, labels_2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper left")
-
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-        ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
-        fig.autofmt_xdate()
-
-        fig.suptitle(
-            f"Évolution Normalisée de la Valeur du Portefeuille ({date_investissement.date()} - {date_fin.date()})",
-            fontsize=14
-        )
-
-        fig.tight_layout()
-        fig.subplots_adjust(top=0.9)
-        plt.savefig("graph_multi_tickers.png")
-        plt.show()
-
-        plt.figure(figsize=(12, 8))
-        bottom = pd.Series(0, index=df_portfolio.index)
-
-        for ticker in tickers_selectionnes:
-            if f"{ticker}_Proportion" in df_portfolio.columns:
-                plt.fill_between(
-                    df_portfolio.index,
-                    bottom,
-                    bottom + df_portfolio[f"{ticker}_Proportion"],
-                    label=f"Proportion de {ticker}",
-                    alpha=0.5
-                )
-                bottom += df_portfolio[f"{ticker}_Proportion"]
-
-        plt.title("Proportions des Entreprises dans le Portefeuille au Fil du Temps (Aire Empilée)", fontsize=16)
-        plt.xlabel("Date", fontsize=14)
-        plt.ylabel("Proportion (%)", fontsize=14)
-        plt.legend(title="Entreprises", fontsize=12)
-        plt.grid(True)
-
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
-        plt.gcf().autofmt_xdate()
-
-        plt.tight_layout()
-        plt.savefig("graph_proportions_tickers.png")
-        plt.show()
-
-        return fig_prices
 
 
     def evolution_valeur_portefeuille(dates, valeurs_portefeuille):
@@ -252,7 +309,34 @@ class Indicateurs:
         fig.update_traces(line=dict(width=2))
         return fig
 
+    def graphique_taux_apparition(taux_apparition):
+        """
+        Génère un graphique montrant le taux d'apparition des actifs dans le portefeuille.
 
+        :param taux_apparition: Dictionnaire avec les tickers comme clés et les taux d'apparition comme valeurs.
+        :return: Figure Plotly à afficher.
+        """
+        # Préparer les données pour le graphique
+        data = pd.DataFrame({
+            "Ticker": list(taux_apparition.keys()),
+            "Taux d'Apparition (%)": [val * 100 for val in taux_apparition.values()]
+        })
+
+        # Créer le graphique
+        fig = px.bar(
+            data,
+            x="Ticker",
+            y="Taux d'Apparition (%)",
+            title="Taux d'Apparition des Actifs dans le Portefeuille",
+            text_auto=".2f",
+            labels={"Ticker": "Actif", "Taux d'Apparition (%)": "Taux (%)"}
+        )
+        fig.update_layout(
+            xaxis_title="Actifs",
+            yaxis_title="Taux d'Apparition (%)",
+            showlegend=False
+        )
+        return fig
 
     def evolution_rendements_actifs(dates, rendements_cumules):
         """
@@ -312,9 +396,6 @@ class Indicateurs:
         return fig
 
 
-    
-
-
     ######################Indicateurs#########################################
     def volatilite_historique(self, df, lambda_ewma=0.94):
         df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%Y')
@@ -326,20 +407,32 @@ class Indicateurs:
         }
 
     def calculate_ewma_volatility(self, prices):
-        log_rets = np.log(prices / prices.shift(1))
-        log_rets.columns=[prices[1]]
-        log_rets.dropna(inplace=True)
-        log_rets
-        # Settings
-        lmb=0.94
-        rolling_win=252
-        # Coeff Data -> Pond vector
-        pond=[[(1-lmb)*lmb**i for i in range(rolling_win-1,-1,-1)]]*len(log_rets.columns)
-        pond=np.transpose(pond)
-        # Calcul EWMA
-        x=(log_rets.iloc[-rolling_win:]**2.0).to_frame()*pond
-        ewma_volatility=(x.sum()*252)**0.5
+        # Vérification des données d'entrée
+        if not isinstance(prices, pd.Series) or prices.empty or len(prices) < 2:
+            raise ValueError("Les données des prix doivent être un Series non vide avec au moins 2 valeurs pour calculer la volatilité EWMA.")
+        
+        # Calcul des rendements logarithmiques
+        log_rets = np.log(prices / prices.shift(1)).dropna()
+        if log_rets.empty:
+            raise ValueError("Les rendements calculés sont vides.")
+
+        # Paramètres pour EWMA
+        lmb = 0.94
+        rolling_win = min(252, len(log_rets))  # Utiliser une fenêtre de 252 jours ou moins si les données sont insuffisantes
+
+        # Coefficients de pondération pour la fenêtre
+        weights = [(1 - lmb) * (lmb ** i) for i in range(rolling_win - 1, -1, -1)]
+        weights = np.array(weights)
+
+        # Vérification des dimensions
+        if len(weights) != rolling_win:
+            raise ValueError("Les dimensions des pondérations ne correspondent pas à la fenêtre de calcul.")
+
+        # Calcul de la volatilité EWMA
+        recent_rets = log_rets[-rolling_win:]  # Derniers rendements pour la fenêtre
+        ewma_volatility = np.sqrt(np.sum(weights * (recent_rets ** 2)) * 252)  # Annualisation
         return ewma_volatility
+
     
     def calculate_var(self, df, alpha, method):
         # Calcul des rendements
