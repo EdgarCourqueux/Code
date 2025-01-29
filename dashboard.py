@@ -9,6 +9,7 @@ import pandas as pd
 import plotly.express as px
 import logging
 from strategies.MinVariance import MinimumVariance
+from strategies.ML import MLInvestmentStrategy
 
 # Exemple de log
 price_lib = PriceData()
@@ -22,7 +23,7 @@ st.title("📈 Dashboard des Stratégies d'Investissement")
 
 # Paramètres de la stratégie
 st.sidebar.header("Paramètres de la stratégie")
-strategie_choisie = st.sidebar.selectbox("Sélectionner une Stratégie", ["BuyAndHold", "Momentum", "MinimumVariance"])
+strategie_choisie = st.sidebar.selectbox("Sélectionner une Stratégie", ["BuyAndHold", "Momentum", "MinimumVariance", "MachineLearning"])
 
 # Paramètres d'entrée
 montant_initial = st.sidebar.number_input("Montant initial (€)", min_value=100, max_value=100000, value=1000)
@@ -31,22 +32,18 @@ montant_initial = st.sidebar.number_input("Montant initial (€)", min_value=100
 data = price_lib.prices(list(TICKERS_DICT.keys()))
 date_min = data.index.min().date()
 
-# Paramètres spécifiques aux stratégies
-if strategie_choisie == "BuyAndHold":
-    date_investissement = pd.to_datetime(
+
+date_investissement = pd.to_datetime(
         st.sidebar.date_input("Date d'investissement", value=datetime(2023, 1, 1), min_value=date_min)
     )
-    date_fin_investissement = pd.to_datetime(
+date_fin_investissement = pd.to_datetime(
         st.sidebar.date_input("Date de fin d'investissement", value=datetime.now().date(), min_value=date_investissement)
     )
-else:  # Momentum
-    date_investissement = pd.to_datetime(
-        st.sidebar.date_input("Date de début de la stratégie", value=datetime(2023, 1, 1), min_value=date_min)
-    )
-    date_fin_investissement = pd.to_datetime(
-        st.sidebar.date_input("Date de fin de la stratégie", value=datetime.now().date(), min_value=date_investissement)
-    )
 
+if strategie_choisie == "MachineLearning":
+    lookback_period = st.sidebar.number_input("Période d'historique (jours)", min_value=1, max_value=365, value=10)
+else:
+    lookback_period = None
 # Validation explicite des dates
 if date_investissement is None or date_fin_investissement is None:
     st.error("Veuillez sélectionner des dates valides pour la stratégie.")
@@ -118,6 +115,18 @@ if st.sidebar.button("Lancer l'analyse"):
         strategie = MinimumVariance(
             montant_initial, tickers_selectionnes, nombre_actifs, periode_reroll, periode_historique, date_investissement, date_fin_investissement
         )
+    elif strategie_choisie == "MachineLearning" and tickers_selectionnes:
+        logging.info(
+            f"Lancement de la stratégie 'MachineLearning' : {tickers_selectionnes} | {montant_initial} | {lookback_period} | {date_investissement} | {date_fin_investissement}"
+        )
+        strategie = MLInvestmentStrategy(
+            tickers=tickers_selectionnes,
+            start_date=date_investissement,
+            end_date=date_fin_investissement,
+            initial_capital=montant_initial,
+            lookback_period=lookback_period,
+        )
+
     try:
         # Exécution de la stratégie
         performance_results = strategie.execute()
@@ -145,46 +154,50 @@ if st.sidebar.button("Lancer l'analyse"):
                     "Matrice de Corrélation",
                 ])
 
-            with tabs[0]:
-                st.subheader("📊 Résumé des Indicateurs")
+        with tabs[0]:
+            st.subheader("📊 Résumé des Indicateurs")
 
-                # Gains et Performance : Affichage direct
-                st.markdown("### Gains et Performance")
+            # 🎯 Section Gains et Performance
+            st.markdown("## 💰 Gains et Performance")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("🔹 Gain Total", f"{performance_results.get('gain_total', 0):,.2f} €")
+            with col2:
+                st.metric("📈 Pourcentage Gain Total", f"{performance_results.get('pourcentage_gain_total', 0):.2f} %")
+            with col3:
+                st.metric("📊 Performance Annualisée", f"{performance_results.get('performance_annualisee', 0):.2f} %")
+
+            # 🎭 Section Volatilité
+            st.markdown("## 📉 Volatilité et Risque")
+            with st.expander("🔍 **Détails de la Volatilité**", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("📊 Volatilité Historique", f"{performance_results.get('volatilite_historique', 0) * 100:.2f} %")
+                with col2:
+                    st.metric("📊 Volatilité EWMA", f"{performance_results.get('ewma_volatility', 0) * 100:.2f} %")
+
+            # ⚠️ Section VaR (Value at Risk)
+            st.markdown("## 🚨 Value at Risk (VaR)")
+            with st.expander("📉 **Détails des Risques VaR**", expanded=False):
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Gain Total (€)", f"{performance_results.get('gain_total', 0):,.2f}€")
+                    st.metric("⚠️ VaR Paramétrique", f"{abs(performance_results.get('VaR Paramétrique', 0)) * 100:.2f} %")
                 with col2:
-                    st.metric("Pourcentage Gain Total (%)", f"{performance_results.get('pourcentage_gain_total', 0):.2f}%")
+                    st.metric("⚠️ VaR Historique", f"{abs(performance_results.get('VaR Historique', 0)) * 100:.2f} %")
                 with col3:
-                    st.metric("Performance Annualisée (%)", f"{performance_results.get('performance_annualisee', 0):.2f}%")
+                    st.metric("⚠️ VaR Cornish-Fisher", f"{abs(performance_results.get('VaR Cornish-Fisher', 0)) * 100:.2f} %")
 
-                # Volatilité
-                with st.expander("Volatilité"):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Volatilité Historique (%)", f"{performance_results.get('volatilite_historique', 0) * 100:.2f}%")
-                    with col2:
-                        st.metric("Volatilité EWMA (%)", f"{performance_results.get('ewma_volatility', 0) * 100:.2f}%")
+            # 🚨 Section CVaR (Conditional VaR)
+            st.markdown("## 🔥 Conditional Value at Risk (CVaR)")
+            with st.expander("⚠️ **Détails des Risques CVaR**", expanded=False):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("🔥 CVaR Paramétrique", f"{abs(performance_results.get('CVaR Paramétrique', 0)) * 100:.2f} %")
+                with col2:
+                    st.metric("🔥 CVaR Historique", f"{abs(performance_results.get('CVaR Historique', 0)) * 100:.2f} %")
+                with col3:
+                    st.metric("🔥 CVaR Cornish-Fisher", f"{abs(performance_results.get('CVaR Cornish-Fisher', 0)) * 100:.2f} %")
 
-                # Value at Risk (VaR)
-                with st.expander("Value at Risk (VaR)"):
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("VaR Paramétrique (%)", f"{abs(performance_results.get('VaR Paramétrique', 0)) * 100:.2f}%")
-                    with col2:
-                        st.metric("VaR Historique (%)", f"{abs(performance_results.get('VaR Historique', 0)) * 100:.2f}%")
-                    with col3:
-                        st.metric("VaR Cornish-Fisher (%)", f"{abs(performance_results.get('VaR Cornish-Fisher', 0)) * 100:.2f}%")
-
-                # Conditional VaR (CVaR)
-                with st.expander("Conditional VaR (CVaR)"):
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("CVaR Paramétrique (%)", f"{abs(performance_results.get('CVaR Paramétrique', 0)) * 100:.2f}%")
-                    with col2:
-                        st.metric("CVaR Historique (%)", f"{abs(performance_results.get('CVaR Historique', 0)) * 100:.2f}%")
-                    with col3:
-                        st.metric("CVaR Cornish-Fisher (%)", f"{abs(performance_results.get('CVaR Cornish-Fisher', 0)) * 100:.2f}%")
             # Graphique des Prix
             with tabs[1]:
                 st.subheader("📈 Évolution des Prix Normalisés des Tickers")
@@ -224,6 +237,47 @@ if st.sidebar.button("Lancer l'analyse"):
 
             # Proportions des Entreprises
             with tabs[3]:
+                if strategie_choisie == "MachineLearning":
+                    summary_data = strategie.get_summary()
+
+                    if "error" in summary_data:
+                        st.error("❌ " + summary_data["error"])
+                    else:
+                        detailed_results = summary_data["detailed_results"]
+                        portfolio_performance = summary_data["portfolio_performance"]
+
+                        if not isinstance(detailed_results, dict) or not detailed_results:
+                            st.error("⚠️ Les résultats détaillés de la stratégie sont vides ou mal formatés.")
+                        else:
+                            # Création du DataFrame pour afficher les performances par actif
+                            results_df = pd.DataFrame.from_dict(detailed_results, orient="index").reset_index()
+                            results_df.rename(columns={"index": "Ticker"}, inplace=True)
+
+                            # Vérification des colonnes avant affichage
+                            required_columns = {"Ticker", "Gain Total (€)", "Pourcentage Gain Total (%)", "Performance Annualisée (%)", "Meilleur Modèle"}
+                            missing_columns = required_columns - set(results_df.columns)
+
+                            if missing_columns:
+                                st.error(f"⚠️ Colonnes manquantes dans results_df : {missing_columns}")
+                            else:
+                                st.subheader("📊 Proportions des Actifs et Algorithmes Utilisés")
+
+                                # Affichage du tableau des proportions
+                                st.dataframe(results_df[["Ticker", "Gain Total (€)", "Pourcentage Gain Total (%)", "Performance Annualisée (%)", "Meilleur Modèle"]])
+
+                                # Graphique des gains par actif
+                                fig = px.bar(
+                                    results_df,
+                                    x="Ticker",
+                                    y="Gain Total (€)",
+                                    color="Ticker",
+                                    title="📊 Répartition des Gains Totaux par Actif",
+                                    labels={"Gain Total (€)": "Gain Total (€)", "Ticker": "Actif"},
+                                    text_auto=".2f"
+                                )
+                                st.plotly_chart(fig)
+
+                                    
                 if strategie_choisie=="BuyAndHold":
                     st.subheader("📊 Proportions des Entreprises dans le Portefeuille")
                     try:
@@ -302,6 +356,7 @@ if st.sidebar.button("Lancer l'analyse"):
                             st.error("Données insuffisantes pour afficher la répartition dynamique.")
                     except Exception as e:
                         st.error(f"Erreur lors de l'affichage de la répartition dynamique : {e}")
+
 
             # Matrice de Corrélation
             with tabs[4]:
