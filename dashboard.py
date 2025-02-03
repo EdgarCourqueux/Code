@@ -215,6 +215,9 @@ if st.sidebar.button("Lancer l'analyse"):
 
             # Valeur du Portefeuille 
             with tabs[2]:
+                if strategie_choisie == "MachineLearning":
+                    st.subheader("💰 Évolution de la Valeur du Portefeuille")
+
                 if strategie_choisie=="BuyAndHold":
                     st.subheader("💰 Évolution de la Valeur du Portefeuille")
                     try:
@@ -238,44 +241,61 @@ if st.sidebar.button("Lancer l'analyse"):
             # Proportions des Entreprises
             with tabs[3]:
                 if strategie_choisie == "MachineLearning":
-                    summary_data = strategie.get_summary()
+                    summary_data = performance_results
 
                     if "error" in summary_data:
                         st.error("❌ " + summary_data["error"])
                     else:
-                        detailed_results = summary_data["detailed_results"]
-                        portfolio_performance = summary_data["portfolio_performance"]
+                        detailed_results = summary_data  # Résultats détaillés issus de la fonction aggregate_portfolio_results
 
                         if not isinstance(detailed_results, dict) or not detailed_results:
                             st.error("⚠️ Les résultats détaillés de la stratégie sont vides ou mal formatés.")
                         else:
                             # Création du DataFrame pour afficher les performances par actif
                             results_df = pd.DataFrame.from_dict(detailed_results, orient="index").reset_index()
-                            results_df.rename(columns={"index": "Ticker"}, inplace=True)
-
+                            results_df.rename(columns={"index": "Métrique", 0: "Valeur"}, inplace=True)
+                            
                             # Vérification des colonnes avant affichage
-                            required_columns = {"Ticker", "Gain Total (€)", "Pourcentage Gain Total (%)", "Performance Annualisée (%)", "Meilleur Modèle"}
+                            required_columns = {"Métrique", "Valeur"}
                             missing_columns = required_columns - set(results_df.columns)
 
                             if missing_columns:
                                 st.error(f"⚠️ Colonnes manquantes dans results_df : {missing_columns}")
                             else:
-                                st.subheader("📊 Proportions des Actifs et Algorithmes Utilisés")
-
-                                # Affichage du tableau des proportions
-                                st.dataframe(results_df[["Ticker", "Gain Total (€)", "Pourcentage Gain Total (%)", "Performance Annualisée (%)", "Meilleur Modèle"]])
-
+                                st.subheader("📊 Résultats de la Stratégie d'Investissement Machine Learning")
+                                # Vérifier les types et convertir si nécessaire
+                                results_df["Valeur"] = results_df["Valeur"].astype(str)  # Convertir toute la colonne en chaîne de caractères
+                                # Affichage du tableau des résultats
+                                st.dataframe(results_df)
+                                
                                 # Graphique des gains par actif
-                                fig = px.bar(
-                                    results_df,
-                                    x="Ticker",
-                                    y="Gain Total (€)",
-                                    color="Ticker",
-                                    title="📊 Répartition des Gains Totaux par Actif",
-                                    labels={"Gain Total (€)": "Gain Total (€)", "Ticker": "Actif"},
-                                    text_auto=".2f"
-                                )
-                                st.plotly_chart(fig)
+                                if "gain_total" in summary_data and "pourcentage_gain_total" in summary_data:
+                                    fig = px.bar(
+                                        x=["Gain Total (€)", "Performance Annualisée (%)"],
+                                        y=[summary_data["gain_total"], summary_data["performance_annualisee"]],
+                                        color=["Gain Total (€)", "Performance Annualisée (%)"],
+                                        title="📊 Performance du Portefeuille",
+                                        labels={"x": "Indicateur", "y": "Valeur (€ ou %)"},
+                                        text_auto=".2f"
+                                    )
+                                    st.plotly_chart(fig)
+                                
+                                # Affichage des métriques de risque
+                                risk_metrics = ["volatilite_historique", "VaR Paramétrique", "VaR Historique", "VaR Cornish-Fisher", 
+                                                "CVaR Paramétrique", "CVaR Historique", "CVaR Cornish-Fisher"]
+                                risk_df = results_df[results_df["Métrique"].isin(risk_metrics)]
+                                
+                                if not risk_df.empty:
+                                    st.subheader("📉 Indicateurs de Risque")
+                                    st.dataframe(risk_df)
+
+                                # Affichage des statistiques de trading
+                                if "trades" in summary_data:
+                                    buy_count, sell_count = strategie.count_trades(summary_data["trades"])
+                                    st.subheader("📈 Statistiques de Trading")
+                                    st.write(f"Nombre total d'achats : {buy_count}")
+                                    st.write(f"Nombre total de ventes : {sell_count}")
+
 
                                     
                 if strategie_choisie=="BuyAndHold":
