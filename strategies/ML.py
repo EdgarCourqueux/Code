@@ -12,13 +12,13 @@ from strategies.data import DataDownloader
 from Indicateurs import Indicateurs
 
 class MLInvestmentStrategy(Indicateurs):
-    def __init__(self, tickers, start_date, end_date, initial_capital=1000, lookback_period=5):
+    def __init__(self, tickers, start_date, end_date, initial_capital=1000, lookback_period=6):
         super().__init__()
         self.tickers = tickers
+        self.lookback_period = lookback_period
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
         self.initial_capital = initial_capital
-        self.lookback_period = lookback_period
         self.models = {
             'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
             'SVM': SVC(probability=True),
@@ -28,26 +28,29 @@ class MLInvestmentStrategy(Indicateurs):
             'DecisionTree': DecisionTreeClassifier(random_state=42),
             'LogisticRegression': LogisticRegression(max_iter=1000, random_state=42)
         }
-        self.allocation = initial_capital / len(tickers)
         self.data_downloader = DataDownloader()
-        self.positions = {ticker: {'status': 'cash', 'shares': 0} for ticker in tickers}
 
     def add_technical_features(self, data):
-        """Add technical indicators for prediction."""
+        """Ajoute des indicateurs techniques pour l'entraînement."""
         df = data.copy()
-        df['Returns'] = df['Close'].pct_change()
-        df['SMA_20'] = df['Close'].rolling(window=20).mean()
-        df['RSI'] = self.calculate_rsi(df['Close'])
-        df['Volume_SMA'] = df['Volume'].rolling(window=20).mean()
-        df['Volume_Ratio'] = df['Volume'] / df['Volume_SMA']
-        return df
-    
-    def count_trades(self, trades):
-        buy_count = sum(1 for trade in trades if trade['action'] == 'buy')
-        sell_count = sum(1 for trade in trades if trade['action'] == 'sell')
-        return buy_count, sell_count
+        
+        # Calculer toutes les colonnes en une seule opération
+        features = pd.DataFrame({
+            'Returns': df['Close'].pct_change(),
+            'SMA_20': df['Close'].rolling(window=20).mean(),
+            'RSI': self.calculate_rsi(df['Close']),
+            'Volume_SMA': df['Volume'].rolling(window=20).mean(),
+            'Volume_Ratio': df['Volume'] / df['Volume'].rolling(window=20).mean()
+        })
+
+        # Fusionner toutes les nouvelles colonnes en une seule fois
+        df = pd.concat([df, features], axis=1)
+
+        return df.copy()  # Copie pour défragmenter
+
 
     def calculate_rsi(self, prices, periods=14):
+        """Calcule l'indicateur RSI."""
         delta = prices.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=periods).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=periods).mean()
@@ -55,187 +58,190 @@ class MLInvestmentStrategy(Indicateurs):
         return 100 - (100 / (1 + rs))
 
     def preprocess_data(self, data):
-        """Prepare data for model training."""
-        processed_data = self.add_technical_features(data)
-        processed_data['Target'] = np.where(processed_data['Returns'].shift(-1) > 0, 1, 0)
-        return processed_data.dropna()
+        """Crée les features avec `lookback_period` et génère la variable cible."""
+        data = self.add_technical_features(data)
+        feature_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'Returns', 'SMA_20', 'RSI', 'Volume_Ratio']
+
+        # Génération des colonnes en une seule opération
+        lagged_features = {f'{col}_lag_{i}': data[col].shift(i) for i in range(1, self.lookback_period + 1) for col in feature_cols}
+        
+        # Fusionner en une seule opération avec pd.concat()
+        data = pd.concat([data, pd.DataFrame(lagged_features, index=data.index)], axis=1)
+
+        # Variable cible : hausse du prix à J+1
+        data['Target'] = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)
+
+        return data.dropna().copy()  # Suppression des NaN et défragmentation
+
 
     def train_and_evaluate(self, data):
-        """Train models and select the best one."""
-        feature_cols = ['Returns', 'SMA_20', 'RSI', 'Volume_Ratio']
+        """Entraîne le modèle en utilisant les `lookback_period` derniers jours comme features."""
+        feature_cols = [col for col in data.columns if "lag" in col]  # Colonnes avec historique
         X = data[feature_cols]
         y = data['Target']
-        
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        best_model = None
-        best_model_name = None
+
         best_accuracy = 0
-        
+        best_model = None
+
         for name, model in self.models.items():
             try:
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
                 accuracy = accuracy_score(y_test, y_pred)
-                
+
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_model = model
-                    best_model_name = name
+
             except Exception as e:
-                print(f"Error training {name}: {e}")
+                print(f"⚠️ Erreur d'entraînement sur {name} : {e}")
                 continue
-        
-        return best_model, best_model_name, best_accuracy
 
-    def execute_trades(self, model, data, ticker):
-        """Execute trades based on predictions and track performance."""
-        feature_cols = ['Returns', 'SMA_20', 'RSI', 'Volume_Ratio']
-        capital = self.allocation
-        position = None
-        entry_price = None
-        trades_history = []
-        
-        for i in range(len(data)-1):
-            features = data.iloc[i][feature_cols]
-            features_df = pd.DataFrame([features], columns=feature_cols)
-            prediction = model.predict(features_df)[0]
-            current_price = data.iloc[i]['Close']
-            
-            if prediction == 1 and position is None:  # Buy signal
-                shares = capital // current_price
-                capital -= shares * current_price
-                position = shares
-                entry_price = current_price
-                trades_history.append({
-                    'date': data.index[i],
-                    'action': 'buy',
-                    'price': current_price,
-                    'shares': shares
-                })
-            
-            elif prediction == 0 and position is not None:  # Sell signal
-                capital += position * current_price
-                trades_history.append({
-                    'date': data.index[i],
-                    'action': 'sell',
-                    'price': current_price,
-                    'shares': position
-                })
-                position = None
-        
-        # Final liquidation if still holding
-        if position is not None:
-            final_price = data.iloc[-1]['Close']
-            capital += position * final_price
-            trades_history.append({
-                'date': data.index[-1],
-                'action': 'sell',
-                'price': final_price,
-                'shares': position
-            })
-        
-        return capital, trades_history
+        return best_model, feature_cols
 
-    def execute(self):
-        print(1)
-        """Execute the strategy and calculate performance metrics."""
-        portfolio_results = {}
-        
+    def execute_trades(self):
+        """Exécute la stratégie et retourne les résultats."""
+        combined_data = {}
+        total_buy_trades=0
+        total_sell_trades=0
+        capital_history = []
+        capital = self.initial_capital
+
         for ticker in self.tickers:
             data = self.data_downloader.download_data(ticker, self.start_date, self.end_date)
             if data.empty:
-                print(f"Les données pour {ticker} sont vides. Vérifiez le ticker ou la période de téléchargement.")
+                print(f"⚠️ Les données pour {ticker} sont vides.")
+                continue
+            combined_data[ticker] = self.preprocess_data(data)
+
+        common_dates = sorted(set.intersection(*(set(data.index) for data in combined_data.values())))
+        common_data = {ticker: data.loc[common_dates] for ticker, data in combined_data.items()}
+
+        merged_data = pd.concat(common_data.values())
+        best_model, feature_cols = self.train_and_evaluate(merged_data)
+
+        if best_model is None:
+            return "Aucun modèle sélectionné", []
+
+        for date in common_dates:
+            if date not in merged_data.index:
+                continue
+            
+            feature_values = merged_data.loc[date, feature_cols].values.reshape(1, -1)
+            feature_df = pd.DataFrame(feature_values, columns=feature_cols)
+
+            missing_features = set(best_model.feature_names_in_) - set(feature_df.columns)
+            if missing_features:
+                raise ValueError(f"⚠️ Certaines features sont absentes : {missing_features}")
+
+            prediction = best_model.predict(feature_df)[0]
+            daily_return = (merged_data.loc[date, 'Close'] - merged_data.loc[date, 'Open']) / merged_data.loc[date, 'Open']
+            daily_return_percentage = daily_return * 100
+            
+            action = "Hold"
+            if prediction == 1:
+                capital += daily_return * capital
+                action = "Buy"
+                total_buy_trades+=1
+            else:
+                capital -= daily_return * capital
+                action = "Sell"
+                total_sell_trades+=1
+
+            print(f"Date: {date},Action: {action}, Daily Return: {daily_return_percentage:.2f}%, Capital: {capital:.2f}")
+
+        return capital,capital_history,total_buy_trades,total_sell_trades
+
+    def execute(self):
+        """Exécute la stratégie d'investissement sur l'ensemble des actifs et calcule les performances finales."""
+        
+        portfolio_results = {}
+        total_initial_capital = self.initial_capital  # Capital initial global
+        total_final_capital = 0  # Capital final global
+        total_buy_trades = 0
+        total_sell_trades = 0
+        capital_evolution = []
+        total_days = 0  # Nombre total de jours d'investissement
+        
+        for ticker in self.tickers:
+            print(f"📈 Exécution de la stratégie pour {ticker}...")
+            
+            final_capital,capital_history,total_buy_trades,total_sell_trades = self.execute_trades()
+            total_final_capital += final_capital
+
+            # Télécharger les données pour le calcul des métriques
+            data = self.data_downloader.download_data(ticker, self.start_date, self.end_date)
+            if data.empty:
+                print(f"⚠️ Les données pour {ticker} sont vides. Vérifiez le ticker ou la période de téléchargement.")
                 continue
 
             data.reset_index(inplace=True)
             data['Date'] = pd.to_datetime(data['Date'])
-
+            capital_evolution.extend(capital_history)
             try:
                 date_investissement_proche = data.loc[data['Date'] >= self.start_date, 'Date'].iloc[0]
                 date_du_jour_proche = data.loc[data['Date'] <= self.end_date, 'Date'].iloc[-1]
+                days_invested = (date_du_jour_proche - date_investissement_proche).days  # Calcul du nombre de jours investis
+                total_days += days_invested  # Ajout au total des jours
             except IndexError:
-                print(f"La date d'investissement ou de fin est hors de la plage des données disponibles pour {ticker}.")
+                print(f"⚠️ La date d'investissement ou de fin est hors de la plage des données disponibles pour {ticker}.")
                 continue
 
-            processed_data = self.preprocess_data(data)
-            best_model, model_name, accuracy = self.train_and_evaluate(processed_data)
-            
-            if best_model is None:
-                continue
-
-            final_capital, trades = self.execute_trades(best_model, processed_data, ticker)
-            
-            # Calculate performance metrics
-            performance_results = self.performance(data, self.allocation, date_investissement_proche, date_du_jour_proche)
-            if performance_results is None:
-                continue
-
+            # 📊 Calcul des métriques de risque
             try:
-                # Add risk metrics
-                performance_results["volatilite_historique"] = self.volatilite_historique(data).get("volatilite_historique", 0)
-                performance_results["var_parametric"] = self.calculate_var(data, alpha=0.05, method="parametric")
-                performance_results["var_historical"] = self.calculate_var(data, alpha=0.05, method="historical")
-                performance_results["var_cornish_fisher"] = self.calculate_var(data, alpha=0.05, method="cornish-fisher")
-                performance_results["cvar_parametric"] = self.calculate_cvar(data, alpha=0.05, method="parametric")
-                performance_results["cvar_historical"] = self.calculate_cvar(data, alpha=0.05, method="historical")
-                performance_results["cvar_cornish_fisher"] = self.calculate_cvar(data, alpha=0.05, method="cornish-fisher")
-                performance_results["model"] = model_name
-                performance_results["model_accuracy"] = accuracy
-                performance_results["trades"] = trades
+                volatilite_historique = self.volatilite_historique(data).get("volatilite_historique", 0)
+                var_parametric = self.calculate_var(data, alpha=0.05, method="parametric")
+                var_historical = self.calculate_var(data, alpha=0.05, method="historical")
+                var_cornish_fisher = self.calculate_var(data, alpha=0.05, method="cornish-fisher")
+                cvar_parametric = self.calculate_cvar(data, alpha=0.05, method="parametric")
+                cvar_historical = self.calculate_cvar(data, alpha=0.05, method="historical")
+                cvar_cornish_fisher = self.calculate_cvar(data, alpha=0.05, method="cornish-fisher")
             except Exception as e:
-                print(f"Erreur lors du calcul des indicateurs pour {ticker} : {e}")
+                print(f"⚠️ Erreur lors du calcul des indicateurs pour {ticker} : {e}")
                 continue
 
-            portfolio_results[ticker] = performance_results
+            print(f"🔹 Résultats pour {ticker}: Capital Final = {final_capital:.2f} €")
 
-        return self.aggregate_portfolio_results(portfolio_results)
-
-    def aggregate_portfolio_results(self, portfolio_results):
-        """Aggregate results across all tickers."""
-        if not portfolio_results:
-            return {
-                "gain_total": 0,
-                "pourcentage_gain_total": 0,
-                "performance_annualisee": 0,
-                "volatilite_historique": 0,
-                "VaR Paramétrique": 0,
-                "VaR Historique": 0,
-                "VaR Cornish-Fisher": 0,
-                "CVaR Paramétrique": 0,
-                "CVaR Historique": 0,
-                "CVaR Cornish-Fisher": 0,
-                "model": "Aucun Modèle"
+            portfolio_results[ticker] = {
+                "gain_total": final_capital - self.initial_capital,
+                "pourcentage_gain_total": ((final_capital / self.initial_capital) - 1) * 100,
+                "volatilite_historique": volatilite_historique,
+                "VaR Paramétrique": var_parametric,
+                "VaR Historique": var_historical,
+                "VaR Cornish-Fisher": var_cornish_fisher,
+                "CVaR Paramétrique": cvar_parametric,
+                "CVaR Historique": cvar_historical,
+                "CVaR Cornish-Fisher": cvar_cornish_fisher,
+                "buy_count": total_buy_trades,
+                "sell_count": total_sell_trades,
+                "days_invested": days_invested
             }
-
-        # Calculate means for portfolio metrics
-        total_gain = sum(float(result['gain_total']) for result in portfolio_results.values() if result['gain_total'] is not None)
-        total_percentage_gain = np.mean([float(result['pourcentage_gain_total']) for result in portfolio_results.values() if result['pourcentage_gain_total'] is not None])
-        performance_annualisee = np.mean([float(result['performance_annualisee']) for result in portfolio_results.values() if result['performance_annualisee'] is not None])
+        capital_evolution_df = pd.DataFrame(capital_evolution, columns=['Date', 'Capital']).drop_duplicates().sort_values(by='Date')
+        # 📊 Agrégation des résultats
+        total_gain = sum(result["gain_total"] for result in portfolio_results.values())
+        total_percentage_gain = np.mean([result["pourcentage_gain_total"] for result in portfolio_results.values()])
         
-        # Calculate risk metrics
-        volatilite_historique = np.mean([float(result['volatilite_historique']) for result in portfolio_results.values() if result['volatilite_historique'] is not None])
-        var_parametric = np.mean([float(result['var_parametric']) for result in portfolio_results.values() if result['var_parametric'] is not None])
-        var_historical = np.mean([float(result['var_historical']) for result in portfolio_results.values() if result['var_historical'] is not None])
-        var_cornish_fisher = np.mean([float(result['var_cornish_fisher']) for result in portfolio_results.values() if result['var_cornish_fisher'] is not None])
-        cvar_parametric = np.mean([float(result['cvar_parametric']) for result in portfolio_results.values() if result['cvar_parametric'] is not None])
-        cvar_historical = np.mean([float(result['cvar_historical']) for result in portfolio_results.values() if result['cvar_historical'] is not None])
-        cvar_cornish_fisher = np.mean([float(result['cvar_cornish_fisher']) for result in portfolio_results.values() if result['cvar_cornish_fisher'] is not None])
-
-        # Get used models
-        models_used = list(set(result.get("model", "Aucun Modèle") for result in portfolio_results.values()))
-        model_summary = ", ".join(models_used) if models_used else "Aucun Modèle"
-
+        # **Correction de la performance annualisée**
+        if total_days > 0:
+            performance_annualisee = ((total_final_capital / total_initial_capital) ** (365 / total_days) - 1) * 100
+        else:
+            performance_annualisee = 0  # Éviter la division par zéro si aucun jour n'a été comptabilisé
+        print(capital_evolution_df.head)
         return {
             "gain_total": total_gain,
             "pourcentage_gain_total": total_percentage_gain,
             "performance_annualisee": performance_annualisee,
-            "volatilite_historique": volatilite_historique,
-            "VaR Paramétrique": var_parametric,
-            "VaR Historique": var_historical,
-            "VaR Cornish-Fisher": var_cornish_fisher,
-            "CVaR Paramétrique": cvar_parametric,
-            "CVaR Historique": cvar_historical,
-            "CVaR Cornish-Fisher": cvar_cornish_fisher,
-            "model": model_summary
+            "volatilite_historique": np.mean([result["volatilite_historique"] for result in portfolio_results.values()]),
+            "VaR Paramétrique": np.mean([result["VaR Paramétrique"] for result in portfolio_results.values()]),
+            "VaR Historique": np.mean([result["VaR Historique"] for result in portfolio_results.values()]),
+            "VaR Cornish-Fisher": np.mean([result["VaR Cornish-Fisher"] for result in portfolio_results.values()]),
+            "CVaR Paramétrique": np.mean([result["CVaR Paramétrique"] for result in portfolio_results.values()]),
+            "CVaR Historique": np.mean([result["CVaR Historique"] for result in portfolio_results.values()]),
+            "CVaR Cornish-Fisher": np.mean([result["CVaR Cornish-Fisher"] for result in portfolio_results.values()]),
+            "total_buy_trades": total_buy_trades,
+            "total_sell_trades": total_sell_trades,
+            "capital_final_total": total_final_capital,
+            "capital_evolution":capital_evolution_df
         }
