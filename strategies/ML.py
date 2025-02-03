@@ -100,59 +100,72 @@ class MLInvestmentStrategy(Indicateurs):
                 continue
 
         return best_model, feature_cols
-
+    
     def execute_trades(self):
         """Exécute la stratégie et retourne les résultats."""
         combined_data = {}
-        total_buy_trades=0
-        total_sell_trades=0
+        total_buy_trades = 0
+        total_sell_trades = 0
         capital_history = []
         capital = self.initial_capital
 
+        # Télécharger et prétraiter les données pour chaque ticker
         for ticker in self.tickers:
             data = self.data_downloader.download_data(ticker, self.start_date, self.end_date)
             if data.empty:
                 print(f"⚠️ Les données pour {ticker} sont vides.")
                 continue
             combined_data[ticker] = self.preprocess_data(data)
-
+        
+        if not combined_data:
+            return "Aucune donnée disponible", [], 0, 0
+        
+        # Trouver les dates communes
         common_dates = sorted(set.intersection(*(set(data.index) for data in combined_data.values())))
+        if not common_dates:
+            return "Aucune date commune trouvée", [], 0, 0
+        
         common_data = {ticker: data.loc[common_dates] for ticker, data in combined_data.items()}
-
         merged_data = pd.concat(common_data.values())
+        
+        # Entraîner et évaluer le modèle
         best_model, feature_cols = self.train_and_evaluate(merged_data)
-
         if best_model is None:
-            return "Aucun modèle sélectionné", []
-
+            return "Aucun modèle sélectionné", [], 0, 0
+        
+        # Simulation des transactions
         for date in common_dates:
             if date not in merged_data.index:
                 continue
-            
+
+            # Récupérer les features du jour
             feature_values = merged_data.loc[date, feature_cols].values.reshape(1, -1)
             feature_df = pd.DataFrame(feature_values, columns=feature_cols)
-
+            
+            # Vérification des features
             missing_features = set(best_model.feature_names_in_) - set(feature_df.columns)
             if missing_features:
                 raise ValueError(f"⚠️ Certaines features sont absentes : {missing_features}")
 
+            # Prédiction du modèle
             prediction = best_model.predict(feature_df)[0]
             daily_return = (merged_data.loc[date, 'Close'] - merged_data.loc[date, 'Open']) / merged_data.loc[date, 'Open']
             daily_return_percentage = daily_return * 100
             
             action = "Hold"
             if prediction == 1:
-                capital += daily_return * capital
+                capital *= (1 + daily_return)
                 action = "Buy"
-                total_buy_trades+=1
-            else:
-                capital -= daily_return * capital
+                total_buy_trades += 1
+            elif prediction == 0:
+                capital *= (1 - daily_return)
                 action = "Sell"
-                total_sell_trades+=1
-
-            print(f"Date: {date},Action: {action}, Daily Return: {daily_return_percentage:.2f}%, Capital: {capital:.2f}")
-
-        return capital,capital_history,total_buy_trades,total_sell_trades
+                total_sell_trades += 1
+            
+            capital_history.append((date, capital))
+            print(f"Date: {date}, Action: {action}, Daily Return: {daily_return_percentage:.2f}%, Capital: {capital:.2f}")
+        
+        return capital, capital_history, total_buy_trades, total_sell_trades
 
     def execute(self):
         """Exécute la stratégie d'investissement sur l'ensemble des actifs et calcule les performances finales."""
@@ -217,8 +230,10 @@ class MLInvestmentStrategy(Indicateurs):
                 "buy_count": total_buy_trades,
                 "sell_count": total_sell_trades,
                 "days_invested": days_invested
-            }
-        capital_evolution_df = pd.DataFrame(capital_evolution, columns=['Date', 'Capital']).drop_duplicates().sort_values(by='Date')
+            } 
+        capital_evolution_df = pd.DataFrame(capital_evolution, columns=['Date', 'Capital'])
+        capital_evolution_df.drop_duplicates(inplace=True)
+        capital_evolution_df.sort_values(by='Date', inplace=True)
         # 📊 Agrégation des résultats
         total_gain = sum(result["gain_total"] for result in portfolio_results.values())
         total_percentage_gain = np.mean([result["pourcentage_gain_total"] for result in portfolio_results.values()])
@@ -228,7 +243,6 @@ class MLInvestmentStrategy(Indicateurs):
             performance_annualisee = ((total_final_capital / total_initial_capital) ** (365 / total_days) - 1) * 100
         else:
             performance_annualisee = 0  # Éviter la division par zéro si aucun jour n'a été comptabilisé
-        print(capital_evolution_df.head)
         return {
             "gain_total": total_gain,
             "pourcentage_gain_total": total_percentage_gain,
