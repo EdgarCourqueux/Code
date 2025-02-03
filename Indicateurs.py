@@ -85,11 +85,52 @@ class Indicateurs:
         except Exception as e:
             raise ValueError(f"Erreur lors du calcul de la matrice de corrélation : {e}")
 
+    def plot_evolution(self):
+        """
+        Génère un graphique interactif de l'évolution du portefeuille dans le temps.
+        """
+        if not hasattr(self, 'history') or not self.history:
+            print("❌ Aucune donnée disponible pour tracer le graphique.")
+            return None
 
+        # Conversion en DataFrame
+        df = pd.DataFrame(self.history, columns=["Date", "Valeur"])
+        df.sort_values(by="Date", inplace=True)
 
+        # Création du graphique interactif
+        fig = px.line(
+            df,
+            x="Date",
+            y="Valeur",
+            title="📈 Évolution en Temps Réel du Portefeuille ML",
+            labels={"Date": "Date", "Valeur": "Valeur du Portefeuille (€)"},
+            line_shape="linear"
+        )
 
+        fig.update_traces(line=dict(width=2, color="blue"))
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Valeur du Portefeuille (€)",
+            hovermode="x unified"
+        )
 
-    
+        return fig
+
+    def plot_capital_evolution_plotly(self,capital_evolution_df):
+        """Génère un graphique interactif avec Plotly"""
+        if capital_evolution_df.empty:
+            return None
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=capital_evolution_df["Date"], y=capital_evolution_df["Capital"],
+                                mode="lines+markers", name="Capital"))
+
+        fig.update_layout(title="Évolution du Capital",
+                        xaxis_title="Date",
+                        yaxis_title="Capital (€)",
+                        template="plotly_dark")
+
+        return fig
 
     def afficher_graphique_interactif(self, data_dict,tickers_selectionnes, montant_initial, date_investissement, date_fin):
         # Graphique de l'évolution des prix
