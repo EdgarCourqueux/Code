@@ -5,6 +5,7 @@ from price_data import PriceData
 import os
 import pickle
 
+
 class DataDownloader:
     def __init__(self, cache_folder="data_cache"):
         """
