@@ -126,10 +126,14 @@ class MLInvestmentStrategy(Indicateurs):
             return "Aucune date commune trouvée", [], 0, 0
         
         common_data = {ticker: data.loc[common_dates] for ticker, data in combined_data.items()}
-        merged_data = pd.concat(common_data.values())
+        merged_data = pd.concat(common_data.values(), axis=0).drop_duplicates()
+        
+        # Vérification de la cohérence des features entre les tickers
+        feature_cols = list(set.intersection(*(set(data.columns) for data in common_data.values())))
         
         # Entraîner et évaluer le modèle
-        best_model, feature_cols = self.train_and_evaluate(merged_data)
+        best_model, selected_features = self.train_and_evaluate(merged_data[feature_cols])
+        print(best_model)
         if best_model is None:
             return "Aucun modèle sélectionné", [], 0, 0
         
@@ -137,16 +141,25 @@ class MLInvestmentStrategy(Indicateurs):
         for date in common_dates:
             if date not in merged_data.index:
                 continue
-
-            # Récupérer les features du jour
-            feature_values = merged_data.loc[date, feature_cols].values.reshape(1, -1)
-            feature_df = pd.DataFrame(feature_values, columns=feature_cols)
+            
+            # Sélectionner les features du jour, en s'assurant qu'elles sont bien alignées
+            try:
+                feature_values = merged_data.loc[date, selected_features]
+                if isinstance(feature_values, pd.Series):
+                    feature_values = feature_values.to_frame().T  # Convertir en DataFrame si nécessaire
+                feature_df = feature_values.reindex(columns=selected_features, fill_value=0)
+            except KeyError as e:
+                print(f"⚠️ Clé manquante pour {date}: {e}")
+                continue
+            except ValueError as e:
+                print(f"⚠️ Erreur de dimensionnalité pour {date}: {e}")
+                continue
             
             # Vérification des features
             missing_features = set(best_model.feature_names_in_) - set(feature_df.columns)
             if missing_features:
                 raise ValueError(f"⚠️ Certaines features sont absentes : {missing_features}")
-
+            
             # Prédiction du modèle
             prediction = best_model.predict(feature_df)[0]
             daily_return = (merged_data.loc[date, 'Close'] - merged_data.loc[date, 'Open']) / merged_data.loc[date, 'Open']
@@ -167,6 +180,8 @@ class MLInvestmentStrategy(Indicateurs):
         
         return capital, capital_history, total_buy_trades, total_sell_trades
 
+
+
     def execute(self):
         """Exécute la stratégie d'investissement sur l'ensemble des actifs et calcule les performances finales."""
         
@@ -179,11 +194,10 @@ class MLInvestmentStrategy(Indicateurs):
         total_days = 0  # Nombre total de jours d'investissement
         
         for ticker in self.tickers:
-            print(f"📈 Exécution de la stratégie pour {ticker}...")
-            
+            print(f"📈 Exécution de la stratégie pour {ticker}...")   
             final_capital,capital_history,total_buy_trades,total_sell_trades = self.execute_trades()
             total_final_capital += final_capital
-
+            print(0)
             # Télécharger les données pour le calcul des métriques
             data = self.data_downloader.download_data(ticker, self.start_date, self.end_date)
             if data.empty:
