@@ -129,11 +129,9 @@ class Indicateurs:
                         xaxis_title="Date",
                         yaxis_title="Capital (€)",
                         template="plotly_dark")
-
         return fig
 
     def afficher_graphique_interactif(self, data_dict,tickers_selectionnes, montant_initial, date_investissement, date_fin):
-        # Graphique de l'évolution des prix
         fig_prices = self._graphique_evolution_prix(data_dict, date_investissement, date_fin)
         # Graphique des proportions des tickers dans le portefeuille
         self._graphique_proportions(data_dict, montant_initial, tickers_selectionnes, date_investissement, date_fin)
