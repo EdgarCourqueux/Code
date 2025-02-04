@@ -58,3 +58,5 @@ urllib3==2.3.0
 watchdog==6.0.0
 webencodings==0.5.1
 yfinance==0.2.51
+scikit-learn==1.4.0
+
