@@ -93,7 +93,7 @@ def _charger_donnees(tickers_selectionnes, date_investissement, date_fin):
 
     return data_dict
 
-data_dict = _charger_donnees(tickers_selectionnes, date_investissement, date_fin_investissement)
+data_dict = _charger_donnees(tickers_selectionnes, "01/01/2018", date_fin_investissement)
 
 if st.sidebar.button("Lancer l'analyse"):
     if strategie_choisie == "BuyAndHold" and tickers_selectionnes:
@@ -219,8 +219,6 @@ if st.sidebar.button("Lancer l'analyse"):
                     st.subheader("💰 Évolution de la Valeur du Portefeuille")
                     # Récupération de l'évolution du capital
                     capital_evolution_df = performance_results["capital_evolution"]
-                    # Vérification et affichage des 5 premières lignes
-                    print(capital_evolution_df.head())
                     fig = indicateurs.plot_capital_evolution_plotly(performance_results.get("capital_evolution",[]))
                     st.plotly_chart(fig)
                 if strategie_choisie=="BuyAndHold":
