@@ -10,12 +10,14 @@ import plotly.express as px
 import logging
 from strategies.MinVariance import MinimumVariance
 from strategies.ML import MLInvestmentStrategy
+from strategies.PCA import ACPInvestmentStrategy
 
-# Exemple de log
+# Initialisation des outils
 price_lib = PriceData()
-indicateurs=Indicateurs()
+indicateurs = Indicateurs()
 data_downloader = DataDownloader()
-# Charger le fichier des tickers et entreprises
+
+# Charger les tickers et entreprises
 TICKERS_DICT = price_lib.universe()
 
 # Interface Streamlit
@@ -23,7 +25,7 @@ st.title("📈 Dashboard des Stratégies d'Investissement")
 
 # Paramètres de la stratégie
 st.sidebar.header("Paramètres de la stratégie")
-strategie_choisie = st.sidebar.selectbox("Sélectionner une Stratégie", ["BuyAndHold", "Momentum", "MinimumVariance", "MachineLearning"])
+strategie_choisie = st.sidebar.selectbox("Sélectionner une Stratégie", ["BuyAndHold", "Momentum", "MinimumVariance", "MachineLearning", "ACP"])
 
 # Paramètres d'entrée
 montant_initial = st.sidebar.number_input("Montant initial (€)", min_value=100, max_value=100000, value=1000)
@@ -32,68 +34,68 @@ montant_initial = st.sidebar.number_input("Montant initial (€)", min_value=100
 data = price_lib.prices(list(TICKERS_DICT.keys()))
 date_min = data.index.min().date()
 
-
+# Sélection des dates d'investissement
 date_investissement = pd.to_datetime(
-        st.sidebar.date_input("Date d'investissement", value=datetime(2023, 1, 1), min_value=date_min)
-    )
+    st.sidebar.date_input("Date d'investissement", value=datetime(2023, 1, 1), min_value=date_min)
+)
 date_fin_investissement = pd.to_datetime(
-        st.sidebar.date_input("Date de fin d'investissement", value=datetime.now().date(), min_value=date_investissement)
-    )
+    st.sidebar.date_input("Date de fin d'investissement", value=datetime.now().date(), min_value=date_investissement)
+)
 
+# Paramètres spécifiques aux stratégies Machine Learning et PCA
 if strategie_choisie == "MachineLearning":
     lookback_period = st.sidebar.number_input("Période d'historique (jours)", min_value=1, max_value=365, value=10)
 else:
     lookback_period = None
+
+if strategie_choisie == "ACP":
+    n_components = st.sidebar.number_input("Nombre de composantes principales", min_value=1, max_value=10, value=2)
+else:
+    n_components = None
+
 # Validation explicite des dates
 if date_investissement is None or date_fin_investissement is None:
     st.error("Veuillez sélectionner des dates valides pour la stratégie.")
     st.stop()
 
 # Sélection de plusieurs entreprises par leurs noms
-entreprises_selectionnees = st.sidebar.multiselect(
-    "Sélectionner les Entreprises", list(TICKERS_DICT.values())
-)
+entreprises_selectionnees = st.sidebar.multiselect("Sélectionner les Entreprises", list(TICKERS_DICT.values()))
 
 # Convertir les noms d'entreprises sélectionnés en tickers correspondants
 tickers_selectionnes = [ticker for ticker, name in TICKERS_DICT.items() if name in entreprises_selectionnees]
 
-# Paramètres supplémentaires pour la stratégie Momentum
-if strategie_choisie == "Momentum" or strategie_choisie=="MinimumVariance":
-    if tickers_selectionnes:
-        max_assets = len(tickers_selectionnes)
-        nombre_actifs = st.sidebar.number_input(
-            "Nombre d'actifs à sélectionner",
-            min_value=1,
-            max_value=max_assets,
-            value=min(3, max_assets),  # La valeur par défaut ne dépasse pas max_assets
-        )
-        periode_reroll = st.sidebar.number_input("Période de réévaluation (jours)", min_value=1, max_value=365, value=30)
-        periode_historique = st.sidebar.number_input("Période historique (jours)", min_value=1, max_value=365, value=90)
-    else:
-        st.sidebar.warning("Veuillez sélectionner au moins une entreprise pour configurer les paramètres.")
+if not tickers_selectionnes:
+    st.warning("⚠️ Veuillez sélectionner au moins une entreprise pour exécuter la stratégie.")
+    st.stop()
+
+# Paramètres supplémentaires pour la stratégie Momentum et MinimumVariance
+if strategie_choisie in ["Momentum", "MinimumVariance"]:
+    max_assets = len(tickers_selectionnes)
+    nombre_actifs = st.sidebar.number_input("Nombre d'actifs à sélectionner", min_value=1, max_value=max_assets, value=min(3, max_assets))
+    periode_reroll = st.sidebar.number_input("Période de réévaluation (jours)", min_value=1, max_value=365, value=30)
+    periode_historique = st.sidebar.number_input("Période historique (jours)", min_value=1, max_value=365, value=90)
 else:
-    nombre_actifs = None
-    periode_reroll = None
-    periode_historique = None
+    nombre_actifs, periode_reroll, periode_historique = None, None, None
 
 # Instancier la stratégie sélectionnée
 strategie = None
 
-def _charger_donnees(tickers_selectionnes, date_investissement, date_fin):
+def _charger_donnees(tickers, date_debut, date_fin):
+    """Télécharge les données pour les tickers sélectionnés entre deux dates."""
     data_dict = {}
-    for ticker in tickers_selectionnes:
+    for ticker in tickers:
         try:
-            data = data_downloader.download_data(ticker, date_investissement, date_fin)
+            data = data_downloader.download_data(ticker, date_debut, date_fin)
             if not data.empty:
                 data_dict[ticker] = data.reset_index()
             else:
-                print(f"Aucune donnée disponible pour le ticker {ticker}.")
+                st.warning(f"Aucune donnée disponible pour {ticker}.")
         except Exception as e:
-            print(f"Erreur lors du téléchargement des données pour {ticker}: {e}")
-
+            st.error(f"Erreur lors du téléchargement des données pour {ticker}: {e}")
     return data_dict
 
-data_dict = _charger_donnees(tickers_selectionnes, "01/01/2018", date_fin_investissement)
+# Charger les données en fonction des dates choisies
+data_dict = _charger_donnees(tickers_selectionnes, date_investissement, date_fin_investissement)
 
 if st.sidebar.button("Lancer l'analyse"):
     if strategie_choisie == "BuyAndHold" and tickers_selectionnes:
@@ -126,11 +128,21 @@ if st.sidebar.button("Lancer l'analyse"):
             initial_capital=montant_initial,
             lookback_period=lookback_period,
         )
+    elif strategie_choisie == "ACP" and tickers_selectionnes:
+        logging.info(
+            f"Lancement de la stratégie 'PCA' : {tickers_selectionnes} | {montant_initial} | {n_components} | {date_investissement} | {date_fin_investissement}"
+        )
+        strategie = ACPInvestmentStrategy(
+            tickers=tickers_selectionnes,
+            start_date=date_investissement,
+            end_date=date_fin_investissement,
+            initial_capital=montant_initial,
+            n_components=n_components,
+        )
 
     try:
         # Exécution de la stratégie
         performance_results = strategie.execute()
-
         # Vérification que le résultat est un dictionnaire structuré
         if not isinstance(performance_results, dict):
             st.error("Les résultats de la stratégie ne sont pas structurés correctement.")
@@ -215,6 +227,12 @@ if st.sidebar.button("Lancer l'analyse"):
 
             # Valeur du Portefeuille 
             with tabs[2]:
+                if strategie_choisie == "ACP":
+                    # 📉 Evolution du capital
+                    if not performance_results["capital_evolution"].empty:
+                        st.subheader("💰 Évolution du Capital")
+                        fig = px.line(performance_results["capital_evolution"], x="Date", y="Total Capital", title="📈 Évolution du Capital")
+                        st.plotly_chart(fig)
                 if strategie_choisie == "MachineLearning":
                     st.subheader("💰 Évolution de la Valeur du Portefeuille")
                     # Récupération de l'évolution du capital
@@ -243,6 +261,16 @@ if st.sidebar.button("Lancer l'analyse"):
 
             # Proportions des Entreprises
             with tabs[3]:
+                if strategie_choisie == "ACP":
+                    # 🔹 PCA - Scree Plot (Variance expliquée)
+                    st.subheader("📊 Scree Plot - Variance expliquée par composante principale")
+                    pca_fig = strategie.scree_plot(performance_results["pca"])  # Appel de la fonction avec l'objet PCA
+                    st.plotly_chart(pca_fig)
+
+                    # 🔥 Heatmap des Coefficients de Contribution (Loadings)
+                    st.subheader("🔥 Heatmap des Coefficients de Contribution des Actifs")
+                    loadings_fig = strategie.plot_loadings(performance_results["pca"], strategie.tickers)
+                    st.plotly_chart(loadings_fig)
                 if strategie_choisie == "MachineLearning":
                     summary_data = performance_results
 
@@ -254,20 +282,15 @@ if st.sidebar.button("Lancer l'analyse"):
                         if not isinstance(detailed_results, dict) or not detailed_results:
                             st.error("⚠️ Les résultats détaillés de la stratégie sont vides ou mal formatés.")
                         else:
-                            # Affichage des statistiques de trading
-                            if "total_buy_trades" in summary_data and "total_sell_trades" in summary_data:
-                                st.subheader("📈 Statistiques de Trading")
-                                st.write(f"Nombre total d'achats : {summary_data['total_buy_trades']}")
-                                st.write(f"Nombre total de ventes : {summary_data['total_sell_trades']}")
+                            # 📈 Affichage des statistiques de Trading
+                            st.subheader("📈 Statistiques de Trading")
 
-                            # Affichage du détail des transactions par actif
-                            if "trades_by_ticker" in summary_data:
-                                trades_ticker_df = pd.DataFrame.from_dict(summary_data["trades_by_ticker"], orient='index').reset_index()
-                                trades_ticker_df.rename(columns={"index": "Actif", "buy_trades": "Achats", "sell_trades": "Ventes"}, inplace=True)
+                            # 🔹 Affichage du détail des transactions par actif
+                            if "trade_summary" in summary_data and isinstance(summary_data["trade_summary"], pd.DataFrame):
                                 st.subheader("📌 Détails des Transactions par Actif")
-                                st.dataframe(trades_ticker_df.astype(str))
-
-
+                                st.dataframe(summary_data["trade_summary"])  # ✅ Affiche directement le DataFrame
+                            else:
+                                st.warning("⚠️ Aucune donnée de transaction disponible.")
                                     
                 if strategie_choisie=="BuyAndHold":
                     st.subheader("📊 Proportions des Entreprises dans le Portefeuille")
@@ -409,6 +432,7 @@ if st.sidebar.button("Lancer l'analyse"):
 
                             # Affichage du tableau dans Streamlit
                             st.dataframe(df_summary)
+                        
                         else:
                             st.error("Données insuffisantes pour afficher le tableau récapitulatif.")
                     except Exception as e:
