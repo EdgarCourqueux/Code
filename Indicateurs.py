@@ -9,6 +9,7 @@ import plotly.express as px
 import matplotlib.dates as mdates
 import os
 import pickle
+from sklearn.decomposition import PCA
 
 class Indicateurs:
 
@@ -115,21 +116,118 @@ class Indicateurs:
         )
 
         return fig
-
-    def plot_capital_evolution_plotly(self,capital_evolution_df):
-        """Génère un graphique interactif avec Plotly"""
-        if capital_evolution_df.empty:
-            return None
+    
+    def scree_plot(self, pca):
+        """
+        Génère un graphique de la variance expliquée par chaque composante principale (Scree Plot).
+        
+        :param pca: Objet PCA de sklearn (déjà entraîné sur les données).
+        :return: Figure Plotly.
+        """
+        explained_variance = pca.explained_variance_ratio_ * 100  # Convertir en pourcentage
+        cumulative_variance = np.cumsum(explained_variance)  # Variance cumulée
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=capital_evolution_df["Date"], y=capital_evolution_df["Capital"],
-                                mode="lines+markers", name="Capital"))
+        fig.add_trace(go.Bar(
+            x=[f'PC{i+1}' for i in range(len(explained_variance))],
+            y=explained_variance,
+            name="Variance expliquée (%)",
+            marker_color="royalblue"
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=[f'PC{i+1}' for i in range(len(explained_variance))],
+            y=cumulative_variance,
+            mode="lines+markers",
+            name="Variance cumulée (%)",
+            line=dict(color="firebrick", width=2, dash="dash")
+        ))
 
-        fig.update_layout(title="Évolution du Capital",
-                        xaxis_title="Date",
-                        yaxis_title="Capital (€)",
-                        template="plotly_dark")
+        fig.update_layout(
+            title="📊 Scree Plot - Variance expliquée par composante principale",
+            xaxis_title="Composantes principales",
+            yaxis_title="Variance expliquée (%)",
+            yaxis=dict(range=[0, 110]),
+            legend=dict(x=0.75, y=1),
+            template="plotly_white"
+        )
+
         return fig
+
+    def plot_loadings(self, pca, feature_names):
+        """
+        Génère un heatmap des coefficients de contribution des actifs dans les composantes principales.
+        
+        :param pca: Objet PCA de sklearn (déjà entraîné sur les données).
+        :param feature_names: Liste des noms des actifs.
+        :return: Figure Plotly.
+        """
+        loadings = pd.DataFrame(pca.components_.T, index=feature_names, columns=[f'PC{i+1}' for i in range(pca.n_components_)])
+
+        fig = px.imshow(
+            loadings,
+            labels=dict(x="Composantes principales", y="Actifs", color="Contribution"),
+            x=loadings.columns,
+            y=loadings.index,
+            color_continuous_scale="RdBu_r",
+            zmin=-1, zmax=1
+        )
+
+        fig.update_layout(
+            title="🔥 Heatmap des Coefficients de Contribution des Actifs (Loadings)",
+            template="plotly_white"
+        )
+
+        return fig
+
+    def plot_capital_evolution_plotly(self, capital_evolution_df):
+        """Génère un graphique interactif avec Plotly pour plusieurs tickers avec une courbe moyenne en noir"""
+        
+        # ✅ Vérifier si le DataFrame est vide
+        if capital_evolution_df.empty:
+            print("⚠️ Aucune donnée disponible pour afficher l'évolution du capital.")
+            return None
+
+        # ✅ Vérifier que les colonnes essentielles sont présentes
+        required_columns = {"Date", "Capital", "Ticker"}
+        if not required_columns.issubset(capital_evolution_df.columns):
+            print(f"⚠️ Le DataFrame ne contient pas toutes les colonnes nécessaires : {capital_evolution_df.columns}")
+            return None
+        
+        # ✅ Conversion de la colonne 'Date' en format datetime pour éviter les erreurs
+        capital_evolution_df["Date"] = pd.to_datetime(capital_evolution_df["Date"])
+
+        # ✅ Calcul de la moyenne du capital pour chaque date (valeur du portefeuille)
+        portfolio_value_df = capital_evolution_df.groupby("Date")["Capital"].mean().reset_index()
+        portfolio_value_df["Ticker"] = "Portfolio"  # Pour identifier dans la légende
+
+        # ✅ Fusionner les données des tickers avec la courbe moyenne
+        combined_df = pd.concat([capital_evolution_df, portfolio_value_df], ignore_index=True)
+
+        # ✅ Création du graphique interactif avec Plotly Express
+        fig = px.line(
+            combined_df,
+            x="Date",
+            y="Capital",
+            color="Ticker",  # Différencier les tickers par couleur
+            title="📈 Évolution du Capital par Ticker avec Valeur Moyenne du Portefeuille",
+            labels={"Date": "Date", "Capital": "Capital (€)", "Ticker": "Actif"},
+            template="plotly_dark"
+        )
+
+        # ✅ Mettre la courbe moyenne en noir
+        fig.for_each_trace(lambda trace: trace.update(line=dict(color="black", width=3)) if trace.name == "Portfolio" else None)
+
+        # ✅ Amélioration de l'affichage
+        fig.update_traces(mode="lines+markers")  # Ajoute des marqueurs pour les points
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Capital (€)",
+            legend_title="Tickers",
+            hovermode="x unified"
+        )
+        return fig
+
 
     def afficher_graphique_interactif(self, data_dict,tickers_selectionnes, montant_initial, date_investissement, date_fin):
         fig_prices = self._graphique_evolution_prix(data_dict, date_investissement, date_fin)
@@ -269,7 +367,6 @@ class Indicateurs:
             return None
 
 
-
     def _graphique_proportions(self, data_dict, montant_initial, tickers_selectionnes, date_investissement, date_fin):
         portfolio_values = []
         for ticker, data in data_dict.items():
@@ -322,7 +419,6 @@ class Indicateurs:
         else:
             print("Aucune donnée pour les proportions.")
             return None
-
 
 
     def evolution_valeur_portefeuille(dates, valeurs_portefeuille):
