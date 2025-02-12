@@ -11,6 +11,9 @@ import logging
 from strategies.MinVariance import MinimumVariance
 from strategies.ML import MLInvestmentStrategy
 from strategies.PCA import ACPInvestmentStrategy
+import docx
+from PIL import Image
+import os
 
 # Initialisation des outils
 price_lib = PriceData()
@@ -80,6 +83,7 @@ else:
 # Instancier la stratégie sélectionnée
 strategie = None
 
+
 def _charger_donnees(tickers, date_debut, date_fin):
     """Télécharge les données pour les tickers sélectionnés entre deux dates."""
     data_dict = {}
@@ -139,7 +143,6 @@ if st.sidebar.button("Lancer l'analyse"):
             initial_capital=montant_initial,
             n_components=n_components,
         )
-
     try:
         # Exécution de la stratégie
         performance_results = strategie.execute()
@@ -147,24 +150,100 @@ if st.sidebar.button("Lancer l'analyse"):
         if not isinstance(performance_results, dict):
             st.error("Les résultats de la stratégie ne sont pas structurés correctement.")
         else:
-            # Création des onglets pour afficher les résultats
-            if strategie_choisie == "Momentum" or strategie_choisie=="MinimumVariance":
-                tabs = st.tabs([
-                    "Résumé des Indicateurs",
-                    "Graphique des Prix",
-                    "Valeur du Portefeuille",
-                    "Proportions",
-                    "Matrice de Corrélation",
-                    "Tableau Récapitulatif",
-                ])
-            else:
-                tabs = st.tabs([
-                    "Résumé des Indicateurs",
-                    "Graphique des Prix",
-                    "Valeur du Portefeuille",
-                    "Proportions",
-                    "Matrice de Corrélation",
-                ])
+            tab_names = [
+                "Résumé des Indicateurs",
+                "Explication",
+                "Graphique des Prix",
+                "Valeur du Portefeuille",
+                "Proportions",
+                "Matrice de Corrélation"
+            ]
+            # Ajouter "Tableau Récapitulatif" seulement si la stratégie le requiert
+            if strategie_choisie in ["Momentum", "MinimumVariance"]:
+                tab_names.append("Tableau Récapitulatif")
+
+            # Création des onglets en filtrant les None
+            tabs = st.tabs(tab_names)
+
+
+        # Ajout du contenu explicatif dans l'onglet "Explication"
+        with tabs[1]:
+            def extraire_contenu_docx_formate():
+                """Extrait et affiche le texte et les images d'un fichier .docx dans Streamlit en conservant la mise en forme."""
+
+                # 📂 Trouver dynamiquement le fichier DOCX correspondant à la stratégie choisie
+                base_dir = os.getcwd()  # Récupère le répertoire courant (même que dashboard.py)
+                fichier = os.path.join(base_dir, f"{strategie_choisie}.docx")
+
+                # Vérifier si le fichier existe
+                if not os.path.isfile(fichier):
+                    return f"⚠️ Fichier introuvable : {fichier}. Vérifiez son emplacement.", []
+
+                try:
+                    doc = docx.Document(fichier)
+                    contenu_texte = []
+                    images = []
+
+                    # 📂 Création d'un dossier temporaire pour stocker les images
+                    dossier_temp = os.path.join(base_dir, "temp_images")
+                    os.makedirs(dossier_temp, exist_ok=True)
+
+                    for para in doc.paragraphs:
+                        texte = para.text.strip()
+
+                        if not texte:
+                            contenu_texte.append("")  # Ajouter un saut de ligne
+
+                        # 🔹 **Gérer les styles de texte**
+                        elif para.style.name.startswith("Heading"):  # Titres (H1, H2, ...)
+                            niveau_titre = int(para.style.name[-1]) if para.style.name[-1].isdigit() else 3
+                            contenu_texte.append(f"{'#' * niveau_titre} {texte}")
+
+                        elif para.runs:  # Gestion du texte enrichi
+                            formatted_text = ""
+                            for run in para.runs:
+                                run_text = run.text
+
+                                if run.bold:
+                                    run_text = f"**{run_text}**"
+                                if run.italic:
+                                    run_text = f"*{run_text}*"
+                                formatted_text += run_text
+
+                            contenu_texte.append(formatted_text)
+
+                    # 🔹 **Gérer les images**
+                    for i, rel in enumerate(doc.part.rels):
+                        if "image" in doc.part.rels[rel].target_ref:
+                            image_part = doc.part.rels[rel].target_part
+                            image_data = image_part.blob
+
+                            chemin_image = os.path.join(dossier_temp, f"image_{i}.png")
+                            with open(chemin_image, "wb") as img_file:
+                                img_file.write(image_data)
+                            
+                            images.append(chemin_image)
+
+                    return "\n\n".join(contenu_texte), images
+
+                except Exception as e:
+                    return f"❌ Erreur lors de la lecture du fichier : {e}", []
+
+            # 📖 Extraction du contenu (Texte + Images)
+            contenu_explication, images_extraites = extraire_contenu_docx_formate()
+
+            # 📌 Affichage dans Streamlit avec **mise en forme**
+            st.markdown(f"""
+            ### 📄 Explication de la Stratégie {strategie_choisie}
+            {contenu_explication}
+            """, unsafe_allow_html=True)
+
+            # 🖼️ **Affichage des images**
+            if images_extraites:
+                st.markdown("### 📷 Images de la Stratégie")
+                for image_path in images_extraites:
+                    st.image(Image.open(image_path), caption=os.path.basename(image_path), use_column_width=True)
+
 
         with tabs[0]:
             st.subheader("📊 Résumé des Indicateurs")
@@ -211,7 +290,7 @@ if st.sidebar.button("Lancer l'analyse"):
                     st.metric("🔥 CVaR Cornish-Fisher", f"{abs(performance_results.get('CVaR Cornish-Fisher', 0)) * 100:.2f} %")
 
             # Graphique des Prix
-            with tabs[1]:
+            with tabs[2]:
                 st.subheader("📈 Évolution des Prix Normalisés des Tickers")
                 try:
                     fig_prices = indicateurs.afficher_graphique_interactif(
@@ -226,7 +305,7 @@ if st.sidebar.button("Lancer l'analyse"):
                     st.error(f"Erreur lors de la création du graphique : {e}")
 
             # Valeur du Portefeuille 
-            with tabs[2]:
+            with tabs[3]:
                 if strategie_choisie == "ACP":
                     # 📉 Evolution du capital
                     if not performance_results["capital_evolution"].empty:
@@ -260,7 +339,7 @@ if st.sidebar.button("Lancer l'analyse"):
                         st.error(f"Erreur : {e}")
 
             # Proportions des Entreprises
-            with tabs[3]:
+            with tabs[4]:
                 if strategie_choisie == "ACP":
                     # 🔹 PCA - Scree Plot (Variance expliquée)
                     st.subheader("📊 Scree Plot - Variance expliquée par composante principale")
@@ -373,7 +452,7 @@ if st.sidebar.button("Lancer l'analyse"):
 
 
             # Matrice de Corrélation
-            with tabs[4]:
+            with tabs[5]:
                 st.subheader("🔗 Matrice de Corrélation des Entreprises")
                 try:
                     # Calcul de la matrice de corrélation
@@ -392,7 +471,7 @@ if st.sidebar.button("Lancer l'analyse"):
                         
             if (strategie_choisie == "Momentum" or strategie_choisie=="MinimumVariance" ) and len(tabs) > 5:
                 # Tableau Récapitulatif
-                with tabs[5]:
+                with tabs[6]:
                     st.subheader("📝 Tableau Récapitulatif des Investissements")
                     try:
                         # Initialisation du tableau récapitulatif
