@@ -160,7 +160,6 @@ class DataDownloader:
         # Retourner un DataFrame vide en cas d'échec complet
         return pd.DataFrame()
 
-
     def clear_cache(self):
         """
         Vide le cache interne des données téléchargées et supprime les fichiers cache locaux.
