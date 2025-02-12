@@ -76,20 +76,29 @@ class BuyAndHold(Indicateurs):
                 "CVaR Historique": 0,
                 "CVaR Cornish-Fisher": 0,
             }
-        total_gain = sum(float(result['gain_total']) for result in portfolio_results.values() if result['gain_total'] is not None)
-        total_percentage_gain = sum(float(result['pourcentage_gain_total']) for result in portfolio_results.values() if result['pourcentage_gain_total'] is not None) / len(portfolio_results)
-        performance_annualisee = sum(float(result['performance_annualisee']) for result in portfolio_results.values() if result['performance_annualisee'] is not None) / len(portfolio_results)
+        total_gain = sum(float(result['gain_total'].iloc[0]) if isinstance(result['gain_total'], pd.Series) else float(result['gain_total']) 
+                        for result in portfolio_results.values() if result['gain_total'] is not None)
 
-        volatilite_historique = np.mean([float(result['volatilite_historique']) for result in portfolio_results.values() if result['volatilite_historique'] is not None])
-        ewma_volatility = np.mean([float(result['ewma_volatility']) for result in portfolio_results.values() if result['ewma_volatility'] is not None])
+        total_percentage_gain = sum(float(result['pourcentage_gain_total'].iloc[0]) if isinstance(result['pourcentage_gain_total'], pd.Series) else float(result['pourcentage_gain_total']) 
+                                    for result in portfolio_results.values() if result['pourcentage_gain_total'] is not None) / len(portfolio_results)
 
-        var_parametric = np.mean([float(result['var_parametric']) for result in portfolio_results.values() if result['var_parametric'] is not None])
-        var_historical = np.mean([float(result['var_historical']) for result in portfolio_results.values() if result['var_historical'] is not None])
-        var_cornish_fisher = np.mean([float(result['var_cornish_fisher']) for result in portfolio_results.values() if result['var_cornish_fisher'] is not None])
+        performance_annualisee = sum(float(result['performance_annualisee'].iloc[0]) if isinstance(result['performance_annualisee'], pd.Series) else float(result['performance_annualisee']) 
+                                    for result in portfolio_results.values() if result['performance_annualisee'] is not None) / len(portfolio_results)
 
-        cvar_parametric = np.mean([float(result['cvar_parametric']) for result in portfolio_results.values() if result['cvar_parametric'] is not None])
-        cvar_historical = np.mean([float(result['cvar_historical']) for result in portfolio_results.values() if result['cvar_historical'] is not None])
-        cvar_cornish_fisher = np.mean([float(result['cvar_cornish_fisher']) for result in portfolio_results.values() if result['cvar_cornish_fisher'] is not None])
+        volatilite_historique = np.mean([
+    float(result['volatilite_historique'].iloc[0]) if isinstance(result['volatilite_historique'], pd.Series) else float(result['volatilite_historique']) 
+    for result in portfolio_results.values() if result['volatilite_historique'] is not None
+])
+
+        ewma_volatility = np.mean([float(result['ewma_volatility'].iloc[0]) if isinstance(result['ewma_volatility'], pd.Series) else float(result['ewma_volatility']) for result in portfolio_results.values() if result['ewma_volatility'] is not None])
+
+        var_parametric = np.mean([float(result['var_parametric'].iloc[0]) if isinstance(result['var_parametric'], pd.Series) else float(result['var_parametric']) for result in portfolio_results.values() if result['var_parametric'] is not None])
+        var_historical = np.mean([float(result['var_historical'].iloc[0]) if isinstance(result['var_historical'], pd.Series) else float(result['var_historical']) for result in portfolio_results.values() if result['var_historical'] is not None])
+        var_cornish_fisher = np.mean([float(result['var_cornish_fisher'].iloc[0]) if isinstance(result['var_cornish_fisher'], pd.Series) else float(result['var_cornish_fisher']) for result in portfolio_results.values() if result['var_cornish_fisher'] is not None])
+
+        cvar_parametric = np.mean([float(result['cvar_parametric'].iloc[0]) if isinstance(result['cvar_parametric'], pd.Series) else float(result['cvar_parametric']) for result in portfolio_results.values() if result['cvar_parametric'] is not None])
+        cvar_historical = np.mean([float(result['cvar_historical'].iloc[0]) if isinstance(result['cvar_historical'], pd.Series) else float(result['cvar_historical']) for result in portfolio_results.values() if result['cvar_historical'] is not None])
+        cvar_cornish_fisher = np.mean([float(result['cvar_cornish_fisher'].iloc[0]) if isinstance(result['cvar_cornish_fisher'], pd.Series) else float(result['cvar_cornish_fisher']) for result in portfolio_results.values() if result['cvar_cornish_fisher'] is not None])
 
         return {
             "gain_total": total_gain,
