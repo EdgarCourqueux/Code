@@ -12,7 +12,6 @@ import pickle
 from sklearn.decomposition import PCA
 
 class Indicateurs:
-
     ######################PERFORMANCE#########################################
     def performance(self, df, montant_initial, date_initiale, date_finale):
         # Vérifier que le DataFrame contient une colonne 'Adj Close'
