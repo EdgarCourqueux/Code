@@ -1,4 +1,3 @@
-import yfinance as yf
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
@@ -88,12 +87,28 @@ class Momentum:
         valeurs_momentum = []
         performances_buy_and_hold = []
         repartition = pd.DataFrame()
-        buy_and_hold_indicators = {}
-
+        
+        # Initialiser les accumulateurs pour les indicateurs de risque
+        risk_indicators = {
+            "volatilite_historique": 0,
+            "ewma_volatility": 0,
+            "VaR Paramétrique": 0,
+            "VaR Historique": 0,
+            "VaR Cornish-Fisher": 0,
+            "CVaR Paramétrique": 0,
+            "CVaR Historique": 0,
+            "CVaR Cornish-Fisher": 0
+        }
+        
         # Suivi des occurrences des actifs dans le portefeuille
         asset_occurrences = {ticker: 0 for ticker in self.tickers}
+        
+        # Compteur pour le nombre de périodes avec données valides
+        valid_periods = 0
 
         final_date = min(self.date_fin, datetime.now())
+        
+        all_results = []  # Pour stocker tous les résultats des périodes
 
         while current_date <= final_date:
             dates.append(current_date)
@@ -113,6 +128,24 @@ class Momentum:
                 # Exécuter BuyAndHold pour cette période
                 buy_and_hold = BuyAndHold(portfolio_value, current_date, top_assets, date_fin_periode)
                 performance_results = buy_and_hold.execute()
+                
+                # Stocker les résultats de cette période
+                all_results.append(performance_results)
+
+                # Vérifier si nous avons des données valides pour cette période
+                has_valid_data = performance_results and any(
+                    key in performance_results and performance_results[key] != 0 
+                    for key in ["VaR Paramétrique", "VaR Historique", "VaR Cornish-Fisher"]
+                )
+                
+                if has_valid_data:
+                    valid_periods += 1
+                    # Accumuler les indicateurs de risque
+                    for key in risk_indicators.keys():
+                        if key in performance_results and performance_results[key] is not None:
+                            # Gérer à la fois les séries et les valeurs simples
+                            value = float(performance_results[key].iloc[0]) if isinstance(performance_results[key], pd.Series) else float(performance_results[key])
+                            risk_indicators[key] += value
 
                 # Mise à jour de la valeur du portefeuille
                 portfolio_value += performance_results.get('gain_total', 0)
@@ -133,14 +166,9 @@ class Momentum:
                 for asset in top_assets:
                     asset_occurrences[asset] += 1
 
-                # Ajouter les indicateurs supplémentaires de BuyAndHold
-                for key, value in performance_results.items():
-                    if key not in ["gain_total", "pourcentage_gain_total", "dates", "valeurs_portefeuille", "repartition", "performance_annualisee"]:
-                        buy_and_hold_indicators[key] = value
-
             except Exception as e:
                 print(f"Erreur lors de l'évaluation : {e}")
-                break
+                # Ne pas sortir de la boucle, essayons la période suivante
 
             current_date += timedelta(days=self.periode_reroll)
 
@@ -151,7 +179,21 @@ class Momentum:
         # Calcul du taux d'apparition
         total_months = (self.date_fin - self.date_debut).days / 30.44
         asset_appearance_rate = {ticker: occurrences / total_months for ticker, occurrences in asset_occurrences.items()}
-
+        
+        # Calculer la moyenne des indicateurs de risque basée uniquement sur les périodes valides
+        final_risk_indicators = risk_indicators.copy()
+        if valid_periods > 0:
+            for key in risk_indicators:
+                final_risk_indicators[key] = risk_indicators[key] / valid_periods
+        else:
+            # Si aucune période valide, utiliser les données de la dernière période qui avait des indicateurs non nuls
+            for result in reversed(all_results):
+                if result and any(key in result and result[key] != 0 for key in risk_indicators):
+                    for key in risk_indicators:
+                        if key in result:
+                            final_risk_indicators[key] = float(result[key].iloc[0]) if isinstance(result[key], pd.Series) else float(result[key])
+                    break
+        
         return {
             "dates": dates,
             "valeurs_portefeuille": valeurs_portefeuille,
@@ -163,5 +205,5 @@ class Momentum:
             "pourcentage_gain_total": (portfolio_value / self.montant_initial - 1) * 100,
             "performance_annualisee": performance_annualisee * 100,
             "taux_apparition": asset_appearance_rate,
-            **buy_and_hold_indicators,
+            **final_risk_indicators,  # Utiliser les indicateurs de risque moyennés ou de la dernière période valide
         }
