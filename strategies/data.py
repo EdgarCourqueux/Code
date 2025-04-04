@@ -74,34 +74,29 @@ class DataDownloader:
             if isinstance(data.columns, pd.MultiIndex):
                 data.columns = data.columns.droplevel(1)
 
-            # Renommer les colonnes pour correspondre au format yfinance
-            expected_columns = {
-                "Open": "Open",
-                "High": "High",
-                "Low": "Low",
-                "Close": "Close",
-                "Adj Close": "Adj Close",
-                "Volume": "Volume"
-            }
-            data = data.rename(columns=expected_columns)
-
-            # Vérifier la présence de toutes les colonnes nécessaires et ajouter les colonnes manquantes
-            for col in ["Open", "High", "Low", "Close", "Adj Close", "Volume"]:
-                if col not in data.columns:
-                    data[col] = pd.NA  # Ajouter la colonne manquante avec des valeurs NaN
-
-            # S'assurer que l'index est bien au format datetime
+            # Si "Date" est une colonne et non l'index, on la définit comme index
             if "Date" in data.columns:
-                data["Date"] = pd.to_datetime(data["Date"], errors="coerce")  # Convertir en datetime
-                data = data.set_index("Date")  # Définir la colonne "Date" comme index
+                data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
+                data = data.set_index("Date")
             elif not pd.api.types.is_datetime64_any_dtype(data.index):
                 data.index = pd.to_datetime(data.index, errors="coerce")
 
-            # Supprimer les lignes où l'index ou les colonnes critiques sont NaN
-            data = data.dropna(subset=["Adj Close", "Open", "High", "Low", "Close"], how="all")
+            # Vérifier les colonnes existantes et mapper avec le format yfinance attendu
+            required_columns = ["Open", "High", "Low", "Close", "Volume"]
+            
+            # Ajouter une colonne "Adj Close" si elle n'existe pas (utiliser Close comme valeur)
+            if "Adj Close" not in data.columns and "Close" in data.columns:
+                data["Adj Close"] = data["Close"]
+            
+            # Vérifier la présence de toutes les colonnes nécessaires et ajouter les colonnes manquantes
+            for col in required_columns + ["Adj Close"]:
+                if col not in data.columns:
+                    data[col] = pd.NA  # Ajouter la colonne manquante avec des valeurs NaN
+
+            # Supprimer les lignes où les colonnes critiques sont NaN
+            data = data.dropna(subset=["Close", "Open", "High", "Low"], how="all")
 
         return data
-
 
     def download_data(self, ticker, start_date, end_date):
         """
