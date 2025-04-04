@@ -10,15 +10,19 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from strategies.data import DataDownloader
 from Indicateurs import Indicateurs
+from sklearn.decomposition import PCA
 
 class MLInvestmentStrategy(Indicateurs):
-    def __init__(self, tickers, start_date, end_date, initial_capital=1000, lookback_period=6):
+    def __init__(self, tickers, start_date, end_date, initial_capital=1000, lookback_period=6, use_pca=False, n_components=2):
         super().__init__()
         self.tickers = tickers
         self.lookback_period = lookback_period
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
-        self.initial_capital = initial_capital/len(tickers)
+        self.initial_capital = initial_capital / len(tickers)
+        self.use_pca = use_pca
+        self.n_components = n_components
+        self.pca=None
         self.models = {
             'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
             'SVM': SVC(probability=True),
@@ -29,6 +33,11 @@ class MLInvestmentStrategy(Indicateurs):
             'LogisticRegression': LogisticRegression(max_iter=1000, random_state=42)
         }
         self.data_downloader = DataDownloader()
+
+    def apply_pca(self, X):
+        pca = PCA(n_components=self.n_components)
+        X_pca = pca.fit_transform(X)
+        return pd.DataFrame(X_pca, index=X.index)
 
     def add_technical_features(self, data):
         """Ajoute des indicateurs techniques pour l'entraînement."""
@@ -70,33 +79,44 @@ class MLInvestmentStrategy(Indicateurs):
         return data.dropna().copy()  # Suppression des NaN et défragmentation
 
     def train_and_evaluate(self, data):
-        """Entraîne le modèle en utilisant uniquement les données jusqu'à start_date."""
         best_model = None
-        # Garder uniquement les données avant start_date pour l'entraînement
+        self.pca = None
+
         train_data = data[data.index < self.start_date]
         if train_data.empty:
             print("⚠️ Pas assez de données pour l'entraînement.")
             return None, None
-        feature_cols = [col for col in train_data.columns if "lag" in col]  # Features historiques
+
+        feature_cols = [col for col in train_data.columns if "lag" in col]
+        self.feature_cols = feature_cols
         X = train_data[feature_cols]
         y = train_data['Target']
-        # Séparer les données pour l'entraînement et le test (validation)
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        if self.use_pca:
+            self.pca = PCA(n_components=self.n_components)
+            X_pca = self.pca.fit_transform(X)
+        else:
+            X_pca = X
+
+
+        X_train, X_val, y_train, y_val = train_test_split(X_pca, y, test_size=0.2, random_state=42)
+
         best_accuracy = 0
-        best_model = None
         for name, model in self.models.items():
             try:
-                model.fit(X_train, y_train)  # Entraînement uniquement sur les données avant start_date
-                y_pred = model.predict(X_val)
-                accuracy = accuracy_score(y_val, y_pred)
+                model.fit(X_train, y_train)
+                accuracy = accuracy_score(y_val, model.predict(X_val))
 
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     best_model = model
             except Exception as e:
                 print(f"⚠️ Erreur d'entraînement sur {name} : {e}")
-                continue
-        return best_model, feature_cols  # On retourne le modèle entraîné
+
+        return best_model, feature_cols
+
+
+
 
     
     def execute_trades(self):
@@ -158,8 +178,13 @@ class MLInvestmentStrategy(Indicateurs):
                 # Vérifier si on a bien une série, sinon transformer en DataFrame
                 if isinstance(feature_values, pd.Series):
                     feature_values = feature_values.to_frame().T  
+                if self.use_pca and self.pca is not None:
+                    feature_values_pca = self.pca.transform(feature_values)
+                    feature_df = pd.DataFrame(feature_values_pca, index=feature_values.index)
+                else:
+                    feature_df = feature_values.reindex(columns=selected_features, fill_value=0)
 
-                feature_df = feature_values.reindex(columns=selected_features, fill_value=0)
+
 
                 # Prédiction basée sur les données de J-lookback_period pour J+1
                 prediction = best_model.predict(feature_df)[0]
@@ -317,7 +342,6 @@ class MLInvestmentStrategy(Indicateurs):
 
         # ✅ Convertir `trade_summary` en DataFrame
         trade_summary_df = pd.DataFrame(trade_summary)
-
         return {
             "gain_total": sum(result["gain_total"] for result in portfolio_results.values()),
             "pourcentage_gain_total": np.mean([result["pourcentage_gain_total"] for result in portfolio_results.values()]),
@@ -331,5 +355,6 @@ class MLInvestmentStrategy(Indicateurs):
             "CVaR Cornish-Fisher": np.mean([result["CVaR Cornish-Fisher"] for result in portfolio_results.values()]),
             "capital_final_total": total_final_capital,
             "capital_evolution": capital_evolution_df,
-            "trade_summary": trade_summary_df  # ✅ Contient maintenant le capital et le pourcentage de gain
+            "trade_summary": trade_summary_df,  # ✅ Contient maintenant le capital et le pourcentage de gain
+            "pca":self.pca
         }
