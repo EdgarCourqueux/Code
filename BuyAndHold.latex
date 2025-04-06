@@ -1,0 +1,66 @@
+Stratégie Buy and Hold avec Analyse de Risque
+=============================================
+
+1. Introduction
+---------------
+La stratégie Buy and Hold consiste à investir un montant fixe dans un ou plusieurs actifs 
+à une date donnée et à conserver ces actifs jusqu'à une date future, sans effectuer 
+d'opérations intermédiaires. Cette stratégie repose sur une vision long terme, 
+indépendante des fluctuations de marché à court terme.
+
+2. Données et Prétraitement
+---------------------------
+Pour chaque actif sélectionné, les données historiques de prix sont téléchargées via l’API 
+"yfinance" entre la date d’investissement t0 et la date de fin t1.
+
+- Le capital initial C0 est réparti équitablement entre tous les actifs (allocation égale).
+- Les données sont nettoyées, formatées, et utilisées pour identifier la première date 
+  disponible ≥ t0 et la dernière date disponible ≤ t1.
+
+3. Calcul de la Performance
+---------------------------
+Pour chaque actif i, on calcule :
+
+- Gain total :  
+  Gi = ((P_i(t1) / P_i(t0)) - 1) × Ai  
+  où P_i(t) est le prix ajusté de l’actif i à la date t, et Ai l’allocation sur l’actif i.
+
+- Pourcentage de gain :  
+  %Gi = ((P_i(t1) / P_i(t0)) - 1) × 100
+
+- Performance annualisée :  
+  R_ann,i = (P_i(t1) / P_i(t0))^(1/n) - 1  
+  où n est la durée en années entre t0 et t1.
+
+4. Analyse de Risque
+---------------------
+Plusieurs indicateurs de risque sont calculés pour chaque actif :
+
+- Volatilité historique : écart-type des rendements journaliers.
+- Volatilité EWMA : volatilité lissée avec moyenne mobile exponentielle.
+- VaR (Value at Risk) :
+  * Paramétrique : basée sur la loi normale.
+  * Historique   : basée sur la distribution empirique.
+  * Cornish-Fisher : ajustée pour asymétrie et aplatissement.
+- CVaR (Conditional VaR) : perte moyenne au-delà de la VaR.
+
+5. Agrégation du Portefeuille
+------------------------------
+Les résultats sont ensuite moyennés ou sommés sur l’ensemble des actifs pour obtenir les 
+performances globales du portefeuille :
+
+- Gain total portefeuille :  
+  G_portefeuille = ∑ Gi
+
+- Performance annualisée portefeuille :  
+  Moyenne des performances annualisées individuelles.
+
+- VaR et CVaR :  
+  Moyenne des VaR et CVaR individuelles (approche simplifiée).
+
+6. Conclusion
+-------------
+La stratégie Buy and Hold permet une gestion passive simple tout en intégrant une 
+analyse complète de performance et de risque. L’implémentation proposée intègre 
+des indicateurs avancés permettant de mieux comprendre la structure de risque 
+du portefeuille.

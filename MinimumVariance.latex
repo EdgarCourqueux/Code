@@ -1,0 +1,89 @@
+Stratégie Minimum Variance avec Reroll Périodique
+==================================================
+
+1. Introduction
+---------------
+Cette stratégie vise à minimiser le risque en sélectionnant les actifs les 
+moins volatils sur une période récente (fenêtre rétrospective). L'idée est 
+d'investir régulièrement dans les actifs les plus stables, en rebalançant 
+le portefeuille à intervalle fixe (période de reroll).
+
+Elle est particulièrement adaptée aux investisseurs prudents cherchant une 
+approche défensive basée sur la réduction de la volatilité.
+
+2. Paramètres de la Stratégie
+-----------------------------
+- Montant initial investi.
+- Liste des tickers disponibles.
+- Nombre d’actifs à retenir à chaque reroll.
+- Fenêtre rétrospective (en jours) pour calculer la volatilité passée.
+- Période de reroll (en jours) : fréquence de réallocation du portefeuille.
+- Dates de début et de fin de la stratégie.
+
+3. Mécanisme de Sélection
+-------------------------
+À chaque date de reroll :
+
+- On récupère les prix ajustés des actifs sur la fenêtre rétrospective.
+- On calcule la **volatilité annualisée** de chaque actif :
+
+  Volatilité = écart-type des rendements log quotidiens × √252
+
+- On sélectionne les `N` actifs ayant la plus faible volatilité.
+
+4. Investissement avec Buy and Hold
+-----------------------------------
+Pour chaque période entre deux rerolls :
+
+- On investit de manière égale dans les actifs sélectionnés.
+- On applique la stratégie Buy and Hold sur la période.
+- On enregistre les indicateurs de performance et de risque :
+
+  - Gain total
+  - Pourcentage de gain
+  - Performance annualisée
+  - Volatilité historique
+  - Volatilité EWMA
+  - VaR (Value at Risk) : paramétrique, historique, Cornish-Fisher
+  - CVaR (Conditional VaR) : paramétrique, historique, Cornish-Fisher
+
+5. Suivi et Agrégation
+----------------------
+À chaque itération, on met à jour :
+
+- La valeur du portefeuille.
+- Les actifs sélectionnés à chaque date.
+- Les performances buy and hold.
+- La volatilité de la période.
+- La répartition des investissements.
+- Le nombre de fois que chaque actif est sélectionné.
+
+6. Calculs Finaux
+-----------------
+En fin de simulation :
+
+- Gain total = Valeur finale - Montant initial.
+- Pourcentage de gain = ((Valeur finale / Montant initial) - 1) × 100
+- Performance annualisée :
+
+  Performance annualisée = (Valeur finale / Montant initial)^(1/n) - 1  
+  (n = nombre d'années)
+
+- Taux d'apparition de chaque actif = nb de fois sélectionné / nb total de périodes
+- Indicateurs de risque moyens (ou derniers disponibles en cas d'absence de données valides)
+
+7. Avantages de la Stratégie
+----------------------------
+- Réduction du risque global du portefeuille.
+- Allocation défensive en marchés instables.
+- Simplicité d’implémentation et de suivi.
+- Basée sur des données historiques objectives.
+
+8. Limites Potentielles
+-----------------------
+- Peut exclure des actifs performants mais volatils.
+- Les périodes de faible volatilité passée ne garantissent pas une faible 
+  volatilité future.
+- Aucune prise en compte de la corrélation entre actifs (pas d’optimisation 
+  de portefeuille moderne type Markowitz).
+

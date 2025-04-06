@@ -1,0 +1,101 @@
+Stratégie Machine Learning d’Investissement (MLInvestmentStrategy)
+===================================================================
+
+1. Introduction
+---------------
+Cette stratégie utilise des algorithmes de Machine Learning pour prédire les 
+mouvements du marché à court terme. Pour chaque actif, un modèle est entraîné 
+à partir de données historiques enrichies par des indicateurs techniques. 
+En fonction de la prédiction, la stratégie décide d’acheter ou de vendre 
+chaque jour.
+
+2. Paramètres Principaux
+-------------------------
+- Liste des actifs (`tickers`)
+- Capital initial par actif
+- Période d’entraînement : avant la date de début
+- Période de test : entre `start_date` et `end_date`
+- `lookback_period` : nombre de jours d’historique utilisé pour créer les features
+- `use_pca` : option pour appliquer une réduction de dimension avec PCA
+- `n_components` : nombre de composantes principales à garder si PCA activé
+
+3. Données et Préparation
+--------------------------
+Pour chaque actif :
+- Téléchargement des données depuis 2010 jusqu’à la date de fin
+- Ajout d’indicateurs techniques :
+  * Rendements journaliers
+  * Moyenne mobile (SMA 20)
+  * RSI (Relative Strength Index)
+  * Moyenne du volume
+  * Ratio du volume actuel sur moyenne
+- Création de variables avec décalage (lag) sur `lookback_period` jours
+- Cible (`Target`) = 1 si le prix augmente le lendemain, sinon 0
+
+4. Entraînement des Modèles
+----------------------------
+- Modèles testés : 
+  * Random Forest
+  * SVM
+  * KNN
+  * Gradient Boosting
+  * AdaBoost
+  * Decision Tree
+  * Régression Logistique
+- Sélection du meilleur modèle selon la précision (`accuracy`)
+- Possibilité d’utiliser PCA pour réduire la dimensionnalité
+
+5. Exécution des Trades
+------------------------
+Pour chaque jour de la période de test :
+- Générer les features à partir des données historiques
+- Prédire le mouvement du marché pour le jour suivant (J+1)
+- Si prédiction = 1 → Acheter : gain si le prix monte
+- Si prédiction = 0 → Vendre à découvert : gain si le prix baisse
+- Calcul du capital cumulé jour par jour
+
+6. Calculs de Performance
+--------------------------
+Par actif :
+- Capital final
+- Nombre de jours investis
+- Nombre de trades acheteurs / vendeurs
+- Modèle sélectionné
+- Performance annualisée :
+  
+  Performance = (Capital final / Capital initial)^(365 / Jours investis) - 1
+
+- Indicateurs de risque :
+  * Volatilité historique
+  * Volatilité EWMA
+  * VaR (Paramétrique, Historique, Cornish-Fisher)
+  * CVaR (idem)
+
+7. Résultats Agrégés
+---------------------
+- Gain total sur tous les actifs
+- Pourcentage de gain moyen
+- Performance annualisée moyenne
+- Moyenne des indicateurs de risque
+- Évolution du capital par date et ticker
+- Résumé des trades par actif :
+  * Modèle utilisé
+  * Nombre de trades Buy/Sell
+  * Capital généré (€)
+  * Gain en pourcentage
+
+8. Avantages
+------------
+- Exploitation de patterns complexes avec Machine Learning
+- Optimisation automatique du modèle pour chaque actif
+- Flexibilité (PCA, choix d’algorithmes, indicateurs techniques)
+- Décisions dynamiques jour après jour
+
+9. Limites
+----------
+- Besoin d’un volume suffisant de données pour entraîner correctement
+- Risque de surapprentissage (overfitting)
+- Modèles sensibles au bruit et à la qualité des données
+- Ne prend pas en compte la corrélation entre actifs
+- Ne modélise pas les coûts de transaction
+

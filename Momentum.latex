@@ -1,0 +1,82 @@
+Stratégie Momentum avec Reroll Périodique
+=========================================
+
+1. Introduction
+---------------
+La stratégie Momentum consiste à investir régulièrement dans les actifs ayant 
+le mieux performé sur une période récente donnée (fenêtre rétrospective), et 
+à rebalancer le portefeuille à intervalle fixe (période de reroll).
+
+L’idée : « ce qui monte a plus de chances de continuer à monter ».
+
+2. Paramètres de la Stratégie
+-----------------------------
+- Montant initial investi.
+- Liste des tickers à analyser.
+- Nombre d’actifs à sélectionner à chaque reroll.
+- Fenêtre rétrospective (en jours) : période utilisée pour calculer la performance passée.
+- Période de reroll (en jours) : fréquence à laquelle on réalloue le portefeuille.
+- Dates de début et de fin de la stratégie.
+
+3. Mécanisme de Sélection
+-------------------------
+À chaque date de reroll :
+
+- On récupère les prix des actifs pour la fenêtre rétrospective.
+- On calcule le **momentum** de chaque actif :
+  
+  Momentum = (Prix le plus récent / Prix au début de la période) - 1
+
+- On sélectionne les `N` actifs avec les meilleurs scores de momentum.
+
+4. Investissement avec Buy and Hold
+-----------------------------------
+Pour chaque période (entre deux rerolls), on utilise la stratégie Buy and Hold 
+sur les actifs sélectionnés. Les indicateurs suivants sont calculés :
+
+- Gain total
+- Pourcentage de gain
+- Performance annualisée
+- Volatilité historique
+- Volatilité EWMA
+- Value at Risk (VaR) : paramétrique, historique, Cornish-Fisher
+- Conditional VaR (CVaR) : paramétrique, historique, Cornish-Fisher
+
+5. Suivi et Agrégation
+----------------------
+À chaque reroll, la stratégie :
+
+- Met à jour la valeur totale du portefeuille.
+- Enregistre les actifs sélectionnés.
+- Calcule les performances et indicateurs de risque de la période.
+- Met à jour les taux d’apparition de chaque actif (fréquence de sélection).
+- Conserve la répartition du portefeuille (poids égal sur les actifs choisis).
+
+6. Calculs Finaux
+-----------------
+À la fin de la période d'investissement :
+
+- Gain total : différence entre la valeur finale et le montant initial.
+- Pourcentage de gain : gain en %.
+- Performance annualisée :
+  
+  Performance annualisée = \left( \frac{\text{Valeur finale}}{\text{Montant initial}} \right)^{1/n} - 1  
+  (où n = durée en années)
+
+- Taux d’apparition de chaque actif dans le portefeuille :
+  
+  Apparition = nombre de fois sélectionné / nombre total de rerolls
+  
+- Moyenne des indicateurs de risque sur les périodes valides uniquement.
+
+7. Avantages de la Stratégie
+----------------------------
+- Exploite une anomalie de marché : la persistance des tendances.
+- Permet une adaptation dynamique du portefeuille.
+- Combine analyse de performance et gestion du risque.
+
+8. Limites Potentielles
+-----------------------
+- Dépendance à la qualité des données.
+- Nécessite des frais de transaction (non intégrés ici).
+- La stratégie peut surperformer ou sous-performer selon le contexte de marché.

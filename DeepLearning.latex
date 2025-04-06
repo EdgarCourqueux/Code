@@ -1,0 +1,95 @@
+Stratégie Deep Learning (MLPClassifier) pour l’Investissement
+=============================================================
+
+1. Introduction
+---------------
+Cette stratégie utilise un modèle de deep learning (MLPClassifier, réseau de neurones 
+multicouches) pour prédire les mouvements de prix à court terme. Chaque actif est 
+traité individuellement : un modèle est entraîné sur des indicateurs techniques 
+calculés à partir des prix passés, et les décisions d’achat ou de vente sont 
+prises quotidiennement en fonction de ces prédictions.
+
+2. Paramètres Clés
+------------------
+- `tickers` : liste des actifs analysés
+- `start_date` / `end_date` : période de test réelle de la stratégie
+- `initial_capital` : capital initial réparti également entre les actifs
+- `lookback_period` : nombre de jours utilisés pour construire les variables décalées (lags)
+
+3. Préparation des Données
+--------------------------
+Pour chaque actif :
+- Téléchargement des données historiques depuis 2010.
+- Calcul d'indicateurs techniques :
+  * Rendements journaliers
+  * Moyenne mobile (SMA 20)
+  * RSI (Relative Strength Index)
+  * MACD et Signal Line
+  * Bandes de Bollinger
+  * Average True Range (ATR)
+  * Moyenne et ratio du volume
+
+- Création des features avec décalage (lags) sur les indicateurs.
+- Définition de la cible (`Target`) :
+  
+  Target = 1 si le prix de clôture augmente le lendemain, sinon 0
+
+- Suppression des lignes contenant des valeurs manquantes ou infinies.
+
+4. Entraînement du Modèle (MLPClassifier)
+------------------------------------------
+- Modèle utilisé : MLPClassifier (réseau de neurones avec une couche cachée)
+- Normalisation des données avec StandardScaler
+- Utilisation de GridSearchCV pour trouver les meilleurs paramètres (activation, alpha, etc.)
+- Utilisation de TimeSeriesSplit pour éviter les fuites temporelles
+- Early stopping activé pour éviter l’overfitting
+- Sauvegarde automatique du modèle et du scaler par ticker
+
+5. Exécution de la Stratégie
+-----------------------------
+- Sur chaque jour de la période de test :
+  * Les features sont extraites et normalisées
+  * Le modèle prédit la tendance du jour suivant
+  * Si la prédiction = 1 → Achat → gain si le prix monte
+  * Si la prédiction = 0 → Vente à découvert → gain si le prix baisse
+
+- Capital mis à jour jour après jour selon les rendements réels
+- Suivi du capital cumulé, des trades buy/sell, et du nombre de jours investis
+
+6. Évaluation et Métriques
+--------------------------
+Pour chaque actif :
+- Capital final, gain total, pourcentage de gain
+- Nombre de jours investis
+- Nombre de trades acheteurs / vendeurs
+- Indicateurs de risque :
+  * Volatilité annualisée
+  * Value at Risk (VaR) à 95%
+  * Conditional VaR (CVaR) à 95%
+  * Ratio de Sharpe
+  * Drawdown maximal
+
+7. Résultats Agrégés
+---------------------
+- Gain total et performance annualisée du portefeuille
+- Moyennes des indicateurs de risque sur tous les actifs
+- Évolution du capital consolidé
+- Importances des features calculées à partir des poids de la première couche du MLP
+- Prédictions, probabilités et vérités terrain enregistrées pour chaque actif
+
+8. Avantages de la Stratégie
+----------------------------
+- Prise de décision intelligente via réseau de neurones
+- Adaptabilité aux patterns complexes non linéaires
+- Intégration d’un grand nombre d’indicateurs techniques
+- Analyse poussée des risques, des performances et des erreurs de prédiction
+- Sauvegarde et réutilisation automatique des modèles
+
+9. Limites Potentielles
+------------------------
+- Risque d’overfitting malgré early stopping
+- Consommation mémoire / CPU plus élevée qu’un modèle simple
+- Sensibilité à la qualité des données (bruit, outliers, etc.)
+- Pas de gestion du portefeuille multi-actifs (allocation fixe)
+- Aucun coût de transaction modélisé dans cette version
+
