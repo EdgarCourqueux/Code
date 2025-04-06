@@ -193,103 +193,38 @@ if st.sidebar.button("Lancer l'analyse"):
 
         # Ajout du contenu explicatif dans l'onglet "Explication"
         with tabs[1]:
-            def extraire_contenu_docx_formate():
-                """Extrait et affiche le texte et les images d'un fichier .docx dans Streamlit en conservant la mise en forme."""
+            with tabs[1]:
+                def afficher_latex_strategie(strategie_choisie):
+                    """Affiche un fichier .latex ligne par ligne dans Streamlit, en formatant correctement math et texte."""
+                    import os
 
-                # 📂 Trouver dynamiquement le fichier DOCX correspondant à la stratégie choisie
-                base_dir = os.getcwd()  # Récupère le répertoire courant (même que dashboard.py)
-                fichier = os.path.join(base_dir, f"{strategie_choisie}.docx")
+                    base_dir = os.getcwd()
+                    chemin_fichier = os.path.join(base_dir, f"{strategie_choisie}.latex")
 
-                # Vérifier si le fichier existe
-                if not os.path.isfile(fichier):
-                    return f"⚠️ Fichier introuvable : {fichier}. Vérifiez son emplacement.", []
-                try:
-                    doc = docx.Document(fichier)
-                    contenu_texte = []
-                    images = []
+                    if not os.path.isfile(chemin_fichier):
+                        st.warning(f"❌ Fichier introuvable : {chemin_fichier}")
+                        return
 
-                    # 📂 Création d'un dossier temporaire pour stocker les images
-                    dossier_temp = os.path.join(base_dir, "temp_images")
-                    os.makedirs(dossier_temp, exist_ok=True)
+                    with open(chemin_fichier, "r", encoding="utf-8") as f:
+                        lignes = f.readlines()
 
-                    for para in doc.paragraphs:
-                            texte = para.text.strip()
-                            
-                            # Gérer les paragraphes vides
-                            if not texte:
-                                contenu_texte.append("<br/>")  # HTML break pour espacement
-                                continue
-                                
-                            # Gérer les styles de paragraphe
-                            para_style = ""
-                            if para.style.name.startswith("Heading"):
-                                niveau_titre = int(para.style.name[-1]) if para.style.name[-1].isdigit() else 3
-                                contenu_texte.append(f"{'#' * niveau_titre} {texte}")
-                                continue
-                            elif "List" in para.style.name:
-                                para_style = "- "  # Style liste à puces
-                            
-                            # Gérer le contenu avec formattage riche
-                            formatted_text = para_style
-                            for run in para.runs:
-                                run_text = run.text
-                                
-                                # Appliquer les styles de texte
-                                styles = []
-                                if run.bold:
-                                    styles.append("**")
-                                if run.italic:
-                                    styles.append("*")
-                                if run.underline:
-                                    run_text = f"<u>{run_text}</u>"
-                                if run.font.highlight_color:
-                                    run_text = f"<mark>{run_text}</mark>"
-                                
-                                # Appliquer styles en début et fin de texte
-                                for style in styles:
-                                    run_text = f"{style}{run_text}{style}"
-                                    
-                                # Ajouter des éléments pour la couleur du texte
-                                if run.font.color.rgb:
-                                    rgb = run.font.color.rgb
-                                    hex_color = f"#{rgb[0:6]}"
-                                    run_text = f'<span style="color:{hex_color}">{run_text}</span>'
-                                    
-                                formatted_text += run_text
-                                
-                            contenu_texte.append(formatted_text)
+                    st.markdown(f"### 📄 Formule mathématique pour {strategie_choisie}")
 
-                    # 🔹 **Gérer les images**
-                    for i, rel in enumerate(doc.part.rels):
-                        if "image" in doc.part.rels[rel].target_ref:
-                            image_part = doc.part.rels[rel].target_part
-                            image_data = image_part.blob
+                    for ligne in lignes:
+                        ligne = ligne.strip()
+                        if not ligne:
+                            continue  # ignorer les lignes vides
 
-                            chemin_image = os.path.join(dossier_temp, f"image_{i}.png")
-                            with open(chemin_image, "wb") as img_file:
-                                img_file.write(image_data)
-                            
-                            images.append(chemin_image)
+                        # Si la ligne contient une formule (commence par \ ou contient =), afficher en LaTeX
+                        if ligne.startswith("\\") or "=" in ligne:
+                            st.latex(ligne)
+                        else:
+                            st.markdown(ligne)
 
-                    return "\n\n".join(contenu_texte), images
 
-                except Exception as e:
-                    return f"❌ Erreur lors de la lecture du fichier : {e}", []
+                # Exécuter la fonction
+                afficher_latex_strategie(strategie_choisie)
 
-            # 📖 Extraction du contenu (Texte + Images)
-            contenu_explication, images_extraites = extraire_contenu_docx_formate()
-
-            # 📌 Affichage dans Streamlit avec **mise en forme**
-            st.markdown(f"""
-            ### 📄 Explication de la Stratégie {strategie_choisie}
-            {contenu_explication}
-            """, unsafe_allow_html=True)
-
-            # 🖼️ **Affichage des images**
-            if images_extraites:
-                st.markdown("### 📷 Images de la Stratégie")
-                for image_path in images_extraites:
-                    st.image(Image.open(image_path), caption=os.path.basename(image_path), use_column_width=True)
 
 
             with tabs[0]:
