@@ -199,7 +199,7 @@ if st.sidebar.button("Lancer l'analyse"):
                     import os
 
                     base_dir = os.getcwd()
-                    chemin_fichier = os.path.join(base_dir, f"{strategie_choisie}.latex")
+                    chemin_fichier = os.path.join(f"{strategie_choisie}.latex")
 
                     if not os.path.isfile(chemin_fichier):
                         st.warning(f"❌ Fichier introuvable : {chemin_fichier}")
