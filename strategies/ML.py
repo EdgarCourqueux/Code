@@ -285,6 +285,7 @@ class MLInvestmentStrategy(Indicateurs):
             # 📊 Calcul des métriques de risque
             try:
                 volatilite_historique = self.volatilite_historique(data).get("volatilite_historique", 0)
+                ewma_volatility = self.calculate_ewma_volatility(data['Adj Close'])
                 var_parametric = self.calculate_var(data, alpha=0.05, method="parametric")
                 var_historical = self.calculate_var(data, alpha=0.05, method="historical")
                 var_cornish_fisher = self.calculate_var(data, alpha=0.05, method="cornish-fisher")
@@ -311,6 +312,7 @@ class MLInvestmentStrategy(Indicateurs):
                 "gain_total": gain_total,
                 "pourcentage_gain_total": pourcentage_gain_total,
                 "volatilite_historique": float(volatilite_historique) if isinstance(volatilite_historique, pd.Series) else volatilite_historique,
+                "ewma_volatility":float(ewma_volatility)if isinstance(ewma_volatility, pd.Series) else ewma_volatility,
                 "VaR Paramétrique": float(var_parametric) if isinstance(var_parametric, pd.Series) else var_parametric,
                 "VaR Historique": float(var_historical) if isinstance(var_historical, pd.Series) else var_historical,
                 "VaR Cornish-Fisher": float(var_cornish_fisher) if isinstance(var_cornish_fisher, pd.Series) else var_cornish_fisher,
@@ -347,6 +349,7 @@ class MLInvestmentStrategy(Indicateurs):
             "pourcentage_gain_total": np.mean([result["pourcentage_gain_total"] for result in portfolio_results.values()]),
             "performance_annualisee": performance_annualisee,
             "volatilite_historique": np.mean([result["volatilite_historique"] for result in portfolio_results.values()]).item(),
+            "ewma_volatility": np.mean([result["ewma_volatility"] for result in portfolio_results.values()]).item(),
             "VaR Paramétrique": np.mean([result["VaR Paramétrique"] for result in portfolio_results.values()]).item(),
             "VaR Historique": np.mean([result["VaR Historique"] for result in portfolio_results.values()]),
             "VaR Cornish-Fisher": np.mean([result["VaR Cornish-Fisher"] for result in portfolio_results.values()]),
