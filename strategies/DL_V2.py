@@ -755,11 +755,26 @@ class DLInvestmentStrategy(Indicateurs):
         
         # Convertir en DataFrame pour le tableau récapitulatif
         trade_summary_df = pd.DataFrame(trade_summary)
+        # Calcul de la durée totale d'investissement (en jours)
+        if capital_evolution:
+            date_debut = capital_evolution_df['Date'].min()
+            date_fin = capital_evolution_df['Date'].max()
+            nb_jours_investis = (date_fin - date_debut).days
+        else:
+            nb_jours_investis = 0
+
+        # Calcul de la performance annualisée
+        if nb_jours_investis > 0:
+            rendement_total = (total_final_capital / self.initial_capital) - 1
+            performance_annualisee = ((1 + rendement_total) ** (365 / nb_jours_investis) - 1) * 100
+        else:
+            performance_annualisee = 0
 
         # Préparer les résultats selon le format demandé
         results = {
             "gain_total": total_final_capital - self.initial_capital,
             "pourcentage_gain_total": ((total_final_capital / self.initial_capital) - 1) * 100,
+            "performance_annualisee": performance_annualisee,
             "capital_final_total": total_final_capital,
             "capital_evolution": capital_evolution_df,
             "trade_summary": trade_summary_df,
