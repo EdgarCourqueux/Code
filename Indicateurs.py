@@ -1179,30 +1179,29 @@ class Indicateurs:
         }
 
     def calculate_ewma_volatility(self, prices):
-        # Vérification des données d'entrée
-        if not isinstance(prices, pd.Series) or prices.empty or len(prices) < 2:
-            raise ValueError("Les données des prix doivent être un Series non vide avec au moins 2 valeurs pour calculer la volatilité EWMA.")
-        
-        # Calcul des rendements logarithmiques
+        if not isinstance(prices, pd.Series):
+            raise ValueError("`prices` doit être une Series.")
+
         log_rets = np.log(prices / prices.shift(1)).dropna()
-        if log_rets.empty:
-            raise ValueError("Les rendements calculés sont vides.")
-        # Paramètres pour EWMA
+
         lmb = 0.94
-        rolling_win = min(252, len(log_rets))  # Utiliser une fenêtre de 252 jours ou moins si les données sont insuffisantes
+        rolling_win = min(252, len(log_rets))  # Adapter à la taille des données
 
-        # Coefficients de pondération pour la fenêtre
-        weights = [(1 - lmb) * (lmb ** i) for i in range(rolling_win - 1, -1, -1)]
-        weights = np.array(weights)
+        if rolling_win < 2:
+            raise ValueError("Pas assez de données pour le calcul EWMA.")
 
-        # Vérification des dimensions
-        if len(weights) != rolling_win:
-            raise ValueError("Les dimensions des pondérations ne correspondent pas à la fenêtre de calcul.")
+        # Poids décroissants (du plus ancien au plus récent)
+        weights = np.array([(1 - lmb) * (lmb ** i) for i in range(rolling_win - 1, -1, -1)])
 
-        # Calcul de la volatilité EWMA
-        recent_rets = log_rets[-rolling_win:]  # Derniers rendements pour la fenêtre
-        ewma_volatility = np.sqrt(np.sum(weights * (recent_rets ** 2)) * 252)  # Annualisation
-        return ewma_volatility
+        # Rendements au carré
+        squared_returns = log_rets[-rolling_win:] ** 2
+
+        # Calcul de la variance pondérée puis racine (volatilité)
+        ewma_variance = np.sum(weights * squared_returns)
+        ewma_volatility = np.sqrt(ewma_variance * 252)  # annualisé
+        print(1)
+        return float(ewma_volatility)
+
 
     
     def calculate_var(self, df, alpha, method):
