@@ -41,7 +41,7 @@ class BuyAndHold(Indicateurs):
 
             try:
                 performance_results["volatilite_historique"] = self.volatilite_historique(data).get("volatilite_historique", 0)
-                #performance_results["ewma_volatility"] = self.calculate_ewma_volatility(data['Adj Close']).iloc[-1] if not data['Adj Close'].empty else 0
+                performance_results["ewma_volatility"] = self.calculate_ewma_volatility(data['Adj Close'])
                 performance_results["var_parametric"] = self.calculate_var(data, alpha=0.05, method="parametric")
                 performance_results["var_historical"] = self.calculate_var(data, alpha=0.05, method="historical")
                 performance_results["var_cornish_fisher"] = self.calculate_var(data, alpha=0.05, method="cornish-fisher")
